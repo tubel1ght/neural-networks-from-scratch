@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Lesson 4 — Separate Learning Rates by Scene</title>
+<style>
+:root{
+  --bg:#f6f0e5;--card:#fffdf8;--ink:#1d1d1f;--muted:#666;--line:#d8cfc0;
+  --blue:#1d4ed8;--green:#15803d;--orange:#ea580c;--red:#dc2626;--purple:#7c3aed;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
+header{background:#fff;border-bottom:1px solid var(--line);padding:22px 32px}
+h1{margin:0;font-size:34px;letter-spacing:-.4px}.sub{margin:6px 0 0;color:var(--muted);font-size:17px}
+.wrap{max-width:1450px;margin:0 auto;padding:20px;display:grid;grid-template-columns:420px 1fr;gap:20px;align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}
+.side{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto}
+.sceneNo{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--muted);font-size:14px;background:#fff}
+.question{font-size:30px;line-height:1.12;margin:16px 0 8px;font-weight:800}
+.sentence{font-size:18px;color:#3f3f46;line-height:1.45;margin:0 0 16px}
+label{display:block;font-weight:800;margin:14px 0 6px}
+input[type=range]{width:100%;accent-color:var(--blue)}
+button{border:1px solid var(--blue);background:var(--blue);color:white;border-radius:12px;padding:12px 15px;font-weight:800;cursor:pointer;margin-top:10px;font-size:16px}
+button.secondary{background:#f5f5f5;color:#222;border-color:#999}
+button.green{background:var(--green);border-color:#166534}
+button.orange{background:var(--orange);border-color:#c2410c}
+button:disabled{opacity:.5;cursor:not-allowed}
+.sceneHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.navTop{display:flex;gap:10px}.navTop button{min-width:95px}.nav{display:none}
+.value{float:right;font-weight:900}
+.metric{font-size:30px;font-weight:900;margin:12px 0}
+.eq{font-family:ui-monospace,Menlo,Consolas,monospace;background:#f3f0ea;border:1px solid #e5ded2;border-radius:12px;padding:14px;white-space:pre-wrap;line-height:1.5;font-size:13px}
+.note{background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;margin-top:12px;font-size:14px;line-height:1.45}
+.blueNote{background:#e0f2fe;border-color:#7dd3fc}
+.controlBox{background:#f5f3ff;border:1px solid #c4b5fd;border-radius:14px;padding:14px;margin:12px 0}
+.controlTitle{font-weight:900;color:#4c1d95;font-size:17px}
+canvas{width:100%;height:590px;touch-action:manipulation;border:1px solid #eadfce;border-radius:16px;background:#fff}
+#diagram{width:100%;height:620px;touch-action:manipulation;border:1px solid #eadfce;border-radius:16px;background:#fff;display:none}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{border:1px solid #e5ddd0;border-radius:14px;padding:12px;background:#fff}
+.card h3{margin:0 0 8px;font-size:18px}
+.derivGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.derivItem{border:1px solid #ddd;border-radius:12px;padding:12px;background:#fff;text-align:center}
+.derivBig{font-size:24px;font-weight:900}
+.node{fill:#fff;stroke:#111827;stroke-width:2.1}.hidden{fill:#eff6ff;stroke:#1d4ed8;stroke-width:2.1}.out{fill:#ecfdf5;stroke:#15803d;stroke-width:2.2}.err{fill:#fff7ed;stroke:#ea580c;stroke-width:2.2}
+.edge{stroke:#555;stroke-width:1.8}.grad{font-size:13px;fill:#dc2626;font-weight:800;text-anchor:middle}.layer{font-size:16px;fill:#111;text-anchor:middle;font-weight:900}
+@media(max-width:1000px){.wrap{grid-template-columns:1fr}.side{position:static;max-height:none}.grid2{grid-template-columns:1fr}.derivGrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>Lesson 4: How the Computer Learns</h1>
+<p class="sub">From error, to derivatives, to gradient descent, to backpropagation.</p>
+</header>
+
+<div class="wrap">
+<section class="panel side">
+  <div class="sceneHeader">
+    <span class="sceneNo" id="sceneNo"></span>
+    <div class="navTop">
+      <button id="prevTop" class="secondary">← Back</button>
+      <button id="nextTop">Next →</button>
+    </div>
+  </div>
+  <div class="question" id="question"></div>
+  <p class="sentence" id="sentence"></p>
+  <div id="controls"></div>
+  <div class="nav">
+    <button id="prev" class="secondary">← Back</button>
+    <button id="next">Next →</button>
+  </div>
+</section>
+
+<main class="panel">
+  <canvas id="canvas" width="1000" height="590"></canvas>
+  <svg id="diagram" viewBox="0 0 1100 620"></svg>
+  <div id="extra"></div>
+</main>
+</div>
+
+<script>
+const xs=Array.from({length:41},(_,i)=>100*i/40);
+const state={
+  scene:0,
+  bias:20,
+  slope:0.3,
+  learningRate:2.0,
+  chainLearningRate:0.0005,
+  networkLearningRate:0.001,
+  delta:1,
+  stepCount:0,
+  history:[],
+  history2D:[],
+  hinge:{w:1.0,c:45,a:1.0,outBias:5},
+  net:{
+    outBias:4,
+    h:[
+      {w:1.0,c:30,a:0.8},
+      {w:-0.8,c:75,a:-0.7}
+    ]
+  },
+  selectedSample:60,
+  training:false
+};
+
+const scenes=[
+["What exactly is the computer trying to reduce?","A model makes many predictions. Their differences from reality are combined into one error number."],
+["What happens if we imagine error against one knob?","Hold the line slope exactly as it was in Scene 1 and imagine trying every possible bias. Those hidden results form a light-gray error curve. We have not uncovered its slope yet—that is the next step."],
+["How can a tiny nudge reveal the direction?","Compare the error just to the left and right. Their difference estimates the derivative: the local slope of the error curve."],
+["How does gradient descent move the knob?","Move opposite the derivative. The learning rate determines how large a step to take."],
+["What if there are two knobs?","With two parameters, RMSE becomes a valley-shaped landscape. Repeated downhill steps trace a path that may zig-zag across the narrow valley while approaching its lowest point."],
+["What is the network doing one operation at a time?","Expand one hinge into a computational graph. Each box performs exactly one mathematical operation, and the arrows simply carry the resulting number forward. The chain rule follows the same boxes backward."],
+["How does backprop work in a tiny network?","Each hidden hinge receives a share of the output error. Backprop computes every gradient efficiently from right to left."],
+["How does training use many examples?","Each example suggests a gradient. Training averages them, updates all parameters, and repeats."]
+];
+
+function reality(x){
+  return 75*Math.exp(-((x-58)*(x-58))/900)+8;
+}
+function lineModel(x,b=state.bias,m=state.slope){return b+m*x}
+function mseLine(b=state.bias,m=state.slope){
+  return xs.reduce((s,x)=>{const e=lineModel(x,b,m)-reality(x);return s+e*e},0)/xs.length;
+}
+function rmseLine(b=state.bias,m=state.slope){
+  return Math.sqrt(mseLine(b,m));
+}
+function dBias(){
+  const r=rmseLine();
+  if(r<1e-12)return 0;
+  return xs.reduce((s,x)=>s+(lineModel(x)-reality(x)),0)/(xs.length*r);
+}
+function dSlope(){
+  const r=rmseLine();
+  if(r<1e-12)return 0;
+  return xs.reduce((s,x)=>s+(lineModel(x)-reality(x))*x,0)/(xs.length*r);
+}
+function normalized2DGradients(){
+  // Use q = 50*slope as the second coordinate. Around the center of x∈[0,100],
+  // one unit of q has a comparable effect to one unit of bias.
+  return {
+    gb:dBias(),
+    gq:dSlope()/50
+  };
+}
+function take2DGradientStep(){
+  const g=normalized2DGradients();
+  const q=50*state.slope;
+
+  if(!state.history2D.length){
+    state.history2D.push({
+      bias:state.bias,
+      slope:state.slope,
+      error:rmseLine()
+    });
+  }
+
+  state.bias-=state.learningRate*g.gb;
+  const newQ=q-state.learningRate*g.gq;
+  state.slope=newQ/50;
+
+  // Keep the point within the displayed teaching landscape.
+  state.bias=clamp(state.bias,-50,120);
+  state.slope=clamp(state.slope,-2,2);
+
+  state.history2D.push({
+    bias:state.bias,
+    slope:state.slope,
+    error:rmseLine()
+  });
+}
+function hingeForward(x){
+  const h=state.hinge;
+  const z=h.w*(x-h.c);
+  const act=Math.max(0,z);
+  const y=h.outBias+h.a*act;
+  return {z,act,y};
+}
+function hingeTarget(x){return reality(x)}
+function hingeLoss(x=state.selectedSample){
+  const f=hingeForward(x),e=f.y-hingeTarget(x);return e*e;
+}
+function hingeGrads(x=state.selectedSample){
+  const h=state.hinge,f=hingeForward(x),target=hingeTarget(x);
+  const dEdy=2*(f.y-target);
+  const dydA=f.act;
+  const dydAct=h.a;
+  const dActdz=f.z>0?1:0;
+  const dzdw=x-h.c;
+  const dzdc=-h.w;
+  return {
+    dEdy,
+    dA:dEdy*dydA,
+    dOut:dEdy,
+    dW:dEdy*dydAct*dActdz*dzdw,
+    dC:dEdy*dydAct*dActdz*dzdc,
+    f,target
+  };
+}
+function netForward(x){
+  let y=state.net.outBias;
+  const hidden=[];
+  state.net.h.forEach(h=>{
+    const z=h.w*(x-h.c),act=Math.max(0,z),contrib=h.a*act;
+    hidden.push({z,act,contrib});
+    y+=contrib;
+  });
+  return {y,hidden};
+}
+function netLoss(){
+  return Math.sqrt(xs.reduce((s,x)=>{const e=netForward(x).y-reality(x);return s+e*e},0)/xs.length);
+}
+function netGradients(){
+  const g={
+    outBias:0,
+    h:state.net.h.map(()=>({w:0,c:0,a:0}))
+  };
+  const r=netLoss();
+  if(r<1e-12)return g;
+  xs.forEach(x=>{
+    const f=netForward(x);
+    const dEdy=(f.y-reality(x))/(xs.length*r);
+    g.outBias+=dEdy;
+    state.net.h.forEach((h,i)=>{
+      const q=f.hidden[i],gate=q.z>0?1:0;
+      g.h[i].a+=dEdy*q.act;
+      g.h[i].w+=dEdy*h.a*gate*(x-h.c);
+      g.h[i].c+=dEdy*h.a*gate*(-h.w);
+    });
+  });
+  return g;
+}
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
+function slider(path,label,value,min,max,step){
+  const id="r_"+path.replaceAll(".","_");
+  return `<label>${label}<span class="value" id="${id}">${Number(value).toFixed(step<1?Math.max(2,String(step).split(".")[1]?.length||2):0)}</span></label>
+  <input data-path="${path}" data-readout="${id}" data-step="${step}" type="range" min="${min}" max="${max}" step="${step}" value="${value}">`;
+}
+function setPath(path,val){
+  const p=path.split(".");
+  if(p.length===1)state[p[0]]=val;
+  else if(p.length===2)state[p[0]][p[1]]=val;
+  else state[p[0]][p[1]][Number(p[2])][p[3]]=val;
+}
+let renderQueued=false;
+let trainingToken=0;
+
+function decimalsForStep(step){
+  const text=String(step);
+  return text.includes(".") ? Math.min(6,text.split(".")[1].length) : 0;
+}
+function queueRender(){
+  if(renderQueued)return;
+  renderQueued=true;
+  requestAnimationFrame(()=>{
+    renderQueued=false;
+    render();
+    updateDynamicText();
+  });
+}
+function updateDynamicText(){
+  document.querySelectorAll("#controls input[data-path]").forEach(input=>{
+    const el=document.getElementById(input.dataset.readout);
+    if(el)el.textContent=Number(input.value).toFixed(decimalsForStep(input.dataset.step||input.step));
+  });
+
+  const metric=document.querySelector("#controls .metric");
+  if(metric){
+    if(state.scene===0)metric.textContent="RMSE: "+rmseLine().toFixed(2);
+    else if(state.scene===1)metric.textContent="RMSE: "+rmseLine(state.bias,state.slope).toFixed(2);
+    else if(state.scene===3)metric.textContent="RMSE: "+rmseLine(state.bias,state.slope).toFixed(2);
+    else if(state.scene===4)metric.textContent="RMSE: "+rmseLine().toFixed(2);
+    else if(state.scene===5)metric.textContent="Example squared error: "+hingeLoss().toFixed(2);
+    else if(state.scene===6||state.scene===7)metric.textContent="Network RMSE: "+netLoss().toFixed(2);
+  }
+
+  if(state.scene===2){
+    const items=document.querySelectorAll(".derivBig");
+    if(items.length>=3){
+      const left=rmseLine(state.bias-state.delta,state.slope);
+      const right=rmseLine(state.bias+state.delta,state.slope);
+      items[0].textContent=left.toFixed(1);
+      items[1].textContent=right.toFixed(1);
+      items[2].textContent=((right-left)/(2*state.delta)).toFixed(2);
+    }
+  }
+}
+function resetTrainingToken(){trainingToken++;}
+function buildControls(){
+  let h="";
+  if(state.scene===0){
+    h+=slider("bias","Line bias",state.bias,-50,120,1);
+    h+=slider("slope","Line slope",state.slope,-2,2,.02);
+    h+=`<div class="metric">RMSE: ${rmseLine().toFixed(2)}</div>
+    <div class="note">The error shown here is root mean square error: square every miss, average them, then take the square root. This is the same error measure used in the earlier lessons.</div>`;
+  }else if(state.scene===1){
+    h+=slider("bias","Bias knob",state.bias,-50,120,1);
+    h+=`<div class="metric">RMSE: ${rmseLine(state.bias,state.slope).toFixed(2)}</div>
+    <button class="green" id="jumpMin">Jump to minimum</button>`;
+  }else if(state.scene===2){
+    h+=slider("bias","Current bias",state.bias,-50,120,1);
+    h+=slider("delta","Nudge size δ",state.delta,.1,8,.1);
+    const left=rmseLine(state.bias-state.delta,state.slope),right=rmseLine(state.bias+state.delta,state.slope);
+    const grad=(right-left)/(2*state.delta);
+    h+=`<div class="derivGrid">
+      <div class="derivItem">Error left<div class="derivBig">${left.toFixed(1)}</div></div>
+      <div class="derivItem">Error right<div class="derivBig">${right.toFixed(1)}</div></div>
+      <div class="derivItem">Estimated derivative<div class="derivBig">${grad.toFixed(2)}</div></div>
+    </div>
+    <div class="note">Positive derivative: move bias left. Negative derivative: move bias right.</div>`;
+  }else if(state.scene===3){
+    h+=slider("bias","Bias",state.bias,-50,120,1);
+    h+=slider("learningRate","Learning rate",state.learningRate,0,20,.1);
+    h+=`<button class="green" id="gdStep">Take one gradient step</button>
+    <button class="secondary" id="resetGD">Reset</button>
+    <div class="metric">RMSE: ${rmseLine(state.bias,state.slope).toFixed(2)}</div>
+    <div class="eq">derivative = ${dBias().toFixed(4)}
+new bias = old bias − learning rate × derivative
+
+(RMSE produces smaller gradients than MSE, so larger learning rates are needed.)</div>`;
+  }else if(state.scene===4){
+    h+=slider("bias","Bias",state.bias,-50,120,1);
+    h+=slider("slope","Slope",state.slope,-2,2,.02);
+    h+=slider("learningRate","Learning rate",state.learningRate,0,20,.1);
+    const g2=normalized2DGradients();
+    h+=`<button class="green" id="gd2Step">Take one 2D gradient step</button>
+    <button class="secondary" id="reset2D">Reset trajectory</button>
+    <div class="metric">RMSE: ${rmseLine().toFixed(2)}</div>
+    <div class="eq">normalized gradient =
+(∂E/∂bias, ∂E/∂(50·slope))
+= (${g2.gb.toFixed(4)}, ${g2.gq.toFixed(4)})
+
+Both coordinates are scaled comparably before stepping.</div>
+    <div class="note">The black line records every step. Because the valley is narrow, the path can zig-zag from one side to the other while still moving downward overall.</div>`;
+  }else if(state.scene===5){
+    h+=slider("selectedSample","Input x",state.selectedSample,0,100,1);
+    h+=slider("chainLearningRate","Learning rate",state.chainLearningRate,0,.02,.0001);
+    h+=`<div class="controlBox"><div class="controlTitle">One hinge</div>
+    ${slider("hinge.w","Weight w",state.hinge.w,-3,3,.05)}
+    ${slider("hinge.c","Hinge location c",state.hinge.c,-50,150,1)}
+    ${slider("hinge.a","Output weight a",state.hinge.a,-3,3,.05)}
+    ${slider("hinge.outBias","Output bias",state.hinge.outBias,-50,100,1)}
+    </div>
+    <div class="metric">Example squared error: ${hingeLoss().toFixed(2)}</div>
+    <button class="green" id="hingeStep">Apply one backprop update</button>
+    <div class="note">This learning rate applies only to the single-example computational graph. Its scale is separate from the landscape learning rate used earlier.</div>`;
+  }else if(state.scene===6){
+    h+=slider("networkLearningRate","Learning rate",state.networkLearningRate,0,.02,.0001);
+    h+=`<button class="green" id="netStep">Backprop one batch</button>
+    <button class="secondary" id="resetNet">Reset network</button>
+    <div class="metric">Network RMSE: ${netLoss().toFixed(2)}</div>
+    <div class="note">All gradients are computed from the same forward pass, then all parameters update together. This network uses its own learning-rate scale.</div>`;
+  }else{
+    h+=slider("networkLearningRate","Learning rate",state.networkLearningRate,0,.02,.0001);
+    h+=`<button class="green" id="train20">Train 20 steps</button>
+    <button class="orange" id="train100">Train 100 steps</button>
+    <button class="secondary" id="resetTrain">Reset</button>
+    <div class="metric">Network RMSE: ${netLoss().toFixed(2)}</div>
+    <div class="note">One batch gradient is the average of the gradients suggested by all training examples. Try larger values to see fast learning and instability.</div>`;
+  }
+  document.getElementById("controls").innerHTML=h;
+}
+function ctxSetup(){
+  const c=document.getElementById("canvas"),ctx=c.getContext("2d");
+  const W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);
+  return {c,ctx,W,H};
+}
+function drawAxes(ctx,W,H,xmin,xmax,ymin,ymax,xlabel,ylabel){
+  const m={l:75,r:25,t:30,b:65},pw=W-m.l-m.r,ph=H-m.t-m.b;
+  const X=x=>m.l+(x-xmin)/(xmax-xmin)*pw;
+  const Y=y=>m.t+(ymax-y)/(ymax-ymin)*ph;
+  ctx.strokeStyle="#e5e7eb";ctx.lineWidth=1;ctx.font="14px Arial";
+  for(let i=0;i<=5;i++){
+    const x=xmin+i*(xmax-xmin)/5;
+    ctx.beginPath();ctx.moveTo(X(x),m.t);ctx.lineTo(X(x),H-m.b);ctx.stroke();
+    ctx.fillStyle="#666";ctx.fillText(x.toFixed(0),X(x)-10,H-m.b+24);
+    const y=ymin+i*(ymax-ymin)/5;
+    ctx.beginPath();ctx.moveTo(m.l,Y(y));ctx.lineTo(W-m.r,Y(y));ctx.stroke();
+    ctx.fillText(y.toFixed(0),m.l-52,Y(y)+5);
+  }
+  ctx.strokeStyle="#111";ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(m.l,m.t);ctx.lineTo(m.l,H-m.b);ctx.lineTo(W-m.r,H-m.b);ctx.stroke();
+  ctx.fillStyle="#111";ctx.font="16px Arial";ctx.fillText(xlabel,W/2-50,H-18);ctx.fillText(ylabel,16,26);
+  return {X,Y,m,pw,ph};
+}
+function curve(ctx,domain,fn,X,Y,color,width=3,dash=[]){
+  ctx.save();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.beginPath();
+  domain.forEach((x,i)=>{const px=X(x),py=Y(fn(x));if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py)});
+  ctx.stroke();ctx.restore();
+}
+function drawPredictionScene(){
+  const {ctx,W,H}=ctxSetup(),a=drawAxes(ctx,W,H,0,100,0,120,"x","score");
+  curve(ctx,xs,reality,a.X,a.Y,"#111827",5);
+  curve(ctx,xs,x=>lineModel(x),a.X,a.Y,"#1d4ed8",4,[10,6]);
+  xs.filter((_,i)=>i%4===0).forEach(x=>{
+    const y1=reality(x),y2=lineModel(x);
+    ctx.strokeStyle="#dc2626";ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(a.X(x),a.Y(y1));ctx.lineTo(a.X(x),a.Y(y2));ctx.stroke();
+  });
+}
+function drawErrorCurve(showNudges=false,showStep=false){
+  const {ctx,W,H}=ctxSetup();
+  const biases=Array.from({length:171},(_,i)=>-50+i);
+  const vals=biases.map(b=>rmseLine(b,state.slope));
+  const ymax=Math.max(...vals)*1.05;
+  const a=drawAxes(ctx,W,H,-50,120,0,ymax,"bias","error");
+  curve(
+    ctx,
+    biases,
+    b=>rmseLine(b,state.slope),
+    a.X,
+    a.Y,
+    state.scene===1?"#c7cbd1":"#1d4ed8",
+    state.scene===1?5:4,
+    state.scene===1?[9,7]:[]
+  );
+  const b=state.bias,e=rmseLine(b,state.slope);
+  ctx.fillStyle="#dc2626";ctx.beginPath();ctx.arc(a.X(b),a.Y(e),8,0,Math.PI*2);ctx.fill();
+  if(showNudges){
+    const nudges=[
+      {v:b-state.delta,label:"b − δ"},
+      {v:b+state.delta,label:"b + δ"}
+    ];
+    nudges.forEach(({v,label})=>{
+      const px=a.X(v),py=a.Y(rmseLine(v,state.slope));
+      ctx.fillStyle="#ea580c";
+      ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle="#9a3412";ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);ctx.stroke();
+      ctx.fillStyle="#9a3412";ctx.font="bold 12px Arial";
+      ctx.fillText(label,px-18,py-13);
+    });
+  }
+  if(showStep&&state.history.length>1){
+    ctx.strokeStyle="#15803d";ctx.lineWidth=3;ctx.beginPath();
+    state.history.forEach((p,i)=>{const x=a.X(p.bias),y=a.Y(p.error);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});
+    ctx.stroke();
+    state.history.forEach(p=>{ctx.fillStyle="#15803d";ctx.beginPath();ctx.arc(a.X(p.bias),a.Y(p.error),4,0,Math.PI*2);ctx.fill()});
+  }
+}
+function drawContour(){
+  const {ctx,W,H}=ctxSetup();
+  const m={l:80,r:30,t:35,b:65},pw=W-m.l-m.r,ph=H-m.t-m.b;
+  const X=b=>m.l+(b+50)/170*pw;
+  const Y=s=>m.t+(2-s)/4*ph;
+  const cols=85,rows=70;
+
+  let min=Infinity,max=-Infinity,grid=[];
+  for(let j=0;j<rows;j++){
+    const s=2-4*j/(rows-1),row=[];
+    for(let i=0;i<cols;i++){
+      const b=-50+170*i/(cols-1);
+      const e=rmseLine(b,s);
+      row.push(e);
+      min=Math.min(min,e);
+      max=Math.max(max,e);
+    }
+    grid.push(row);
+  }
+
+  for(let j=0;j<rows;j++){
+    for(let i=0;i<cols;i++){
+      const q=(grid[j][i]-min)/(max-min||1);
+      const r=Math.round(255*q);
+      const g=Math.round(235*(1-q));
+      const bl=Math.round(255*(1-q));
+      ctx.fillStyle=`rgb(${r},${g},${bl})`;
+      ctx.fillRect(
+        m.l+i*pw/cols,
+        m.t+j*ph/rows,
+        pw/cols+1,
+        ph/rows+1
+      );
+    }
+  }
+
+  ctx.strokeStyle="#111";
+  ctx.lineWidth=2;
+  ctx.strokeRect(m.l,m.t,pw,ph);
+  ctx.fillStyle="#111";
+  ctx.font="16px Arial";
+  ctx.fillText("bias",W/2,H-18);
+  ctx.fillText("slope",18,28);
+
+  // Draw the complete optimization trajectory.
+  if(state.history2D.length>1){
+    ctx.save();
+    ctx.strokeStyle="#111827";
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    state.history2D.forEach((p,i)=>{
+      const px=X(p.bias),py=Y(p.slope);
+      if(i===0)ctx.moveTo(px,py);
+      else ctx.lineTo(px,py);
+    });
+    ctx.stroke();
+
+    state.history2D.forEach((p,i)=>{
+      const px=X(p.bias),py=Y(p.slope);
+      ctx.fillStyle=i===state.history2D.length-1?"#dc2626":"#fff";
+      ctx.strokeStyle="#111827";
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.arc(px,py,i===state.history2D.length-1?7:4.5,0,Math.PI*2);
+      ctx.fill();
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  const px=X(state.bias),py=Y(state.slope);
+  if(state.history2D.length<=1){
+    ctx.fillStyle="#dc2626";
+    ctx.beginPath();
+    ctx.arc(px,py,7,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // Draw the downhill direction in screen coordinates.
+  const {gb,gq}=normalized2DGradients();
+  const norm=Math.hypot(gb,gq)||1;
+  const stepPixels=75;
+  const db=-gb/norm;
+  const dq=-gq/norm;
+  const ds=dq/50;
+
+  const targetX=X(state.bias+db*12);
+  const targetY=Y(state.slope+ds*12);
+
+  ctx.strokeStyle="#15803d";
+  ctx.lineWidth=4;
+  ctx.beginPath();
+  ctx.moveTo(px,py);
+  ctx.lineTo(targetX,targetY);
+  ctx.stroke();
+
+  ctx.fillStyle="#166534";
+  ctx.font="bold 14px Arial";
+  ctx.fillText("downhill direction",targetX+8,targetY-8);
+
+  ctx.fillStyle="#111";
+  ctx.font="bold 14px Arial";
+  ctx.fillText(`RMSE ${rmseLine().toFixed(2)}`,m.l+12,m.t+22);
+}
+function drawHingeScene(){
+  const {ctx,W,H}=ctxSetup(),a=drawAxes(ctx,W,H,0,100,0,120,"x","output");
+  curve(ctx,xs,reality,a.X,a.Y,"#111827",5);
+  curve(ctx,xs,x=>hingeForward(x).y,a.X,a.Y,"#1d4ed8",4,[10,6]);
+  const x=state.selectedSample,f=hingeForward(x),t=reality(x);
+  ctx.fillStyle="#dc2626";ctx.beginPath();ctx.arc(a.X(x),a.Y(f.y),8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#111";ctx.beginPath();ctx.arc(a.X(x),a.Y(t),8,0,Math.PI*2);ctx.fill();
+}
+function drawComputationalGraph(){
+  document.getElementById("canvas").style.display="none";
+  const svg=document.getElementById("diagram");
+  svg.style.display="block";
+
+  const x=state.selectedSample;
+  const h=state.hinge;
+  const target=hingeTarget(x);
+
+  const shifted=x-h.c;
+  const weighted=h.w*shifted;
+  const activated=Math.max(0,weighted);
+  const scaled=h.a*activated;
+  const prediction=scaled+h.outBias;
+  const difference=prediction-target;
+  const error=difference*difference;
+
+  const gate=weighted>0?1:0;
+  const dE_dPrediction=2*difference;
+  const dE_dScaled=dE_dPrediction;
+  const dE_dA=dE_dScaled*activated;
+  const dE_dActivated=dE_dScaled*h.a;
+  const dE_dWeighted=dE_dActivated*gate;
+  const dE_dW=dE_dWeighted*shifted;
+  const dE_dShifted=dE_dWeighted*h.w;
+  const dE_dC=-dE_dShifted;
+  const dE_dBias=dE_dPrediction;
+
+  let s="";
+
+  function box(x,y,w,h,cls,title,value,local=""){
+    s+=`<rect class="${cls}" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="16"/>`;
+    s+=`<text x="${x}" y="${y-17}" text-anchor="middle" style="font-size:14px;font-weight:900">${title}</text>`;
+    s+=`<text x="${x}" y="${y+4}" text-anchor="middle" style="font-size:12px;fill:#555">${value}</text>`;
+    if(local)s+=`<text x="${x}" y="${y+25}" text-anchor="middle" style="font-size:11px;fill:#dc2626;font-weight:800">${local}</text>`;
+  }
+  function arrow(x1,y1,x2,y2){
+    s+=`<line class="edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" marker-end="url(#cgArrow)"/>`;
+  }
+
+  s+=`<defs><marker id="cgArrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#555"/></marker></defs>`;
+  s+=`<text x="550" y="28" text-anchor="middle" style="font-size:20px;font-weight:900">The same hinge, expanded into elementary operations</text>`;
+  s+=`<text x="550" y="49" text-anchor="middle" style="font-size:13px;fill:#666">No edge carries a weight. Every weight, bias, subtraction, multiplication, and nonlinearity is an explicit operation box.</text>`;
+
+  const y=165;
+  box(55,y,78,76,"node","Input x",x.toFixed(2));
+  box(175,y,120,88,"hidden","Subtract c",`${x.toFixed(2)} − ${h.c.toFixed(2)} = ${shifted.toFixed(2)}`,"local derivative 1");
+  box(330,y,120,88,"hidden","Multiply by w",`${shifted.toFixed(2)} × ${h.w.toFixed(2)} = ${weighted.toFixed(2)}`,`local derivative ${shifted.toFixed(2)}`);
+  box(485,y,120,88,"hidden","Max with 0",`max(0, ${weighted.toFixed(2)}) = ${activated.toFixed(2)}`,`local derivative ${gate}`);
+  box(640,y,120,88,"hidden","Multiply by a",`${activated.toFixed(2)} × ${h.a.toFixed(2)} = ${scaled.toFixed(2)}`,`local derivative ${activated.toFixed(2)}`);
+  box(795,y,125,88,"out","Add output bias",`${scaled.toFixed(2)} + ${h.outBias.toFixed(2)} = ${prediction.toFixed(2)}`,"local derivative 1");
+  box(940,y,105,88,"out","Prediction ŷ",prediction.toFixed(2));
+  box(1040,y,100,88,"err","Subtract target",`${prediction.toFixed(2)} − ${target.toFixed(2)} = ${difference.toFixed(2)}`,"local derivative 1");
+
+  arrow(94,y,115,y);
+  arrow(235,y,270,y);
+  arrow(390,y,425,y);
+  arrow(545,y,580,y);
+  arrow(700,y,732,y);
+  arrow(858,y,888,y);
+  arrow(993,y,990,y);
+
+  box(1040,310,105,88,"err","Square",`${difference.toFixed(2)}² = ${error.toFixed(2)}`,`local derivative ${(2*difference).toFixed(2)}`);
+  arrow(1040,209,1040,266);
+
+  box(175,325,92,62,"node","Parameter c",h.c.toFixed(2));
+  arrow(175,294,175,210);
+
+  box(330,325,92,62,"node","Parameter w",h.w.toFixed(2));
+  arrow(330,294,330,210);
+
+  box(640,325,92,62,"node","Parameter a",h.a.toFixed(2));
+  arrow(640,294,640,210);
+
+  box(795,325,115,62,"node","Output bias",h.outBias.toFixed(2));
+  arrow(795,294,795,210);
+
+  box(1040,70,96,58,"node","Target y",target.toFixed(2));
+  arrow(1040,99,1040,120);
+
+  s+=`<rect x="70" y="430" width="960" height="145" rx="18" fill="#fff7ed" stroke="#fed7aa"/>`;
+  s+=`<text x="550" y="458" text-anchor="middle" style="font-size:17px;font-weight:900">Backward pass: walk through the same boxes in reverse</text>`;
+  s+=`<text x="550" y="481" text-anchor="middle" style="font-size:13px;fill:#666">At each box, multiply the derivative arriving from the right by that box’s local derivative.</text>`;
+  s+=`<text x="190" y="523" text-anchor="middle" style="font-size:15px;font-weight:900;fill:#dc2626">∂E/∂c = ${dE_dC.toFixed(2)}</text>`;
+  s+=`<text x="430" y="523" text-anchor="middle" style="font-size:15px;font-weight:900;fill:#dc2626">∂E/∂w = ${dE_dW.toFixed(2)}</text>`;
+  s+=`<text x="670" y="523" text-anchor="middle" style="font-size:15px;font-weight:900;fill:#dc2626">∂E/∂a = ${dE_dA.toFixed(2)}</text>`;
+  s+=`<text x="900" y="523" text-anchor="middle" style="font-size:15px;font-weight:900;fill:#dc2626">∂E/∂bias = ${dE_dBias.toFixed(2)}</text>`;
+  s+=`<text x="550" y="553" text-anchor="middle" style="font-size:13px;fill:#555">Example: ∂E/∂w = (∂E/∂ŷ) × a × ReLU′ × (x−c)</text>`;
+
+  svg.innerHTML=s;
+}
+function drawNetworkScene(){
+  const c=document.getElementById("canvas");c.style.display="none";
+  const svg=document.getElementById("diagram");svg.style.display="block";
+  const g=netGradients();
+  let s="";
+  function edge(x1,y1,x2,y2,label,lx,ly){s+=`<line class="edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/><text class="grad" x="${lx}" y="${ly}">${label}</text>`}
+  function rect(x,y,w,h,cls,l1,l2=""){s+=`<rect class="${cls}" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="18"/><text x="${x}" y="${y-(l2?8:0)}" text-anchor="middle" style="font-size:14px;font-weight:800">${l1}</text>`;if(l2)s+=`<text x="${x}" y="${y+15}" text-anchor="middle" style="font-size:12px;fill:#666">${l2}</text>`}
+  s+=`<text class="layer" x="100" y="35">Input</text><text class="layer" x="480" y="35">Hidden hinges</text><text class="layer" x="820" y="35">Output</text><text class="layer" x="1020" y="35">Error</text>`;
+  rect(100,260,110,70,"node","x");
+  [160,360].forEach((y,i)=>{
+    const h=state.net.h[i],gg=g.h[i];
+    edge(155,260,350,y,`∂E/∂w${i+1}=${gg.w.toFixed(1)}`,250,(260+y)/2-8);
+    rect(480,y,260,92,"hidden",`ReLU(w${i+1}(x−c${i+1}))`,`∂E/∂c${i+1}=${gg.c.toFixed(1)}`);
+    edge(610,y,735,260,`∂E/∂a${i+1}=${gg.a.toFixed(1)}`,675,(y+260)/2-8);
+  });
+  rect(820,260,165,100,"out","y = sum + bias",`∂E/∂bias=${g.outBias.toFixed(1)}`);
+  edge(903,260,967,260,"",0,0);
+  rect(1020,260,100,100,"err","Error",netLoss().toFixed(1));
+  svg.innerHTML=s;
+}
+function drawTraining(){
+  const {ctx,W,H}=ctxSetup();
+  const hist=state.history.length?state.history:[{step:0,error:netLoss()}];
+  const ymax=Math.max(1,...hist.map(p=>p.error))*1.05;
+  const a=drawAxes(ctx,W,H,0,Math.max(20,hist.length-1),0,ymax,"training step","RMSE");
+  ctx.strokeStyle="#15803d";ctx.lineWidth=4;ctx.beginPath();
+  hist.forEach((p,i)=>{const x=a.X(p.step),y=a.Y(p.error);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});
+  ctx.stroke();
+}
+function render(){
+  document.getElementById("extra").innerHTML="";
+  document.getElementById("canvas").style.display="block";
+  document.getElementById("diagram").style.display="none";
+  if(state.scene===0)drawPredictionScene();
+  else if(state.scene===1)drawErrorCurve(false,false);
+  else if(state.scene===2)drawErrorCurve(true,false);
+  else if(state.scene===3)drawErrorCurve(false,true);
+  else if(state.scene===4)drawContour();
+  else if(state.scene===5){
+    drawComputationalGraph();
+    document.getElementById("extra").innerHTML=`<div class="note blueNote"><b>Forward pass:</b> numbers move left to right. <b>Backward pass:</b> derivatives move right to left through the same operation boxes.</div>`;
+  }else if(state.scene===6)drawNetworkScene();
+  else drawTraining();
+}
+function resetNet(){
+  state.net={outBias:4,h:[{w:1.0,c:30,a:0.8},{w:-0.8,c:75,a:-0.7}]};
+}
+function netStep(){
+  const g=netGradients(),lr=state.networkLearningRate;
+  state.net.outBias-=lr*g.outBias;
+  state.net.h.forEach((h,i)=>{
+    h.w=clamp(h.w-lr*g.h[i].w,-5,5);
+    h.c=clamp(h.c-lr*g.h[i].c,-100,200);
+    h.a=clamp(h.a-lr*g.h[i].a,-5,5);
+  });
+}
+async function trainAsync(n){
+  const token=++trainingToken;
+  const buttons=[...document.querySelectorAll("#controls button")];
+  buttons.forEach(b=>b.disabled=true);
+
+  for(let i=0;i<n;i++){
+    if(token!==trainingToken)break;
+    netStep();
+    state.history.push({step:state.history.length,error:netLoss()});
+
+    if(i%5===4 || i===n-1){
+      render();
+      updateDynamicText();
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+    }
+  }
+
+  if(token===trainingToken)buttons.forEach(b=>b.disabled=false);
+}
+function updateHeader(){
+  document.getElementById("sceneNo").textContent=`Scene ${state.scene+1} of 8`;
+  document.getElementById("question").textContent=scenes[state.scene][0];
+  document.getElementById("sentence").textContent=scenes[state.scene][1];
+  document.getElementById("prev").disabled=state.scene===0;
+  document.getElementById("prevTop").disabled=state.scene===0;
+
+  const nextLabel=state.scene===7?"Done":"Next →";
+  document.getElementById("next").textContent=nextLabel;
+  document.getElementById("nextTop").textContent=nextLabel;
+}
+function buildScene(){updateHeader();buildControls();render()}
+document.getElementById("controls").addEventListener("input",e=>{
+  const t=e.target;
+  if(!t.dataset.path)return;
+  setPath(t.dataset.path,Number(t.value));
+
+  const readout=document.getElementById(t.dataset.readout);
+  if(readout)readout.textContent=Number(t.value).toFixed(decimalsForStep(t.dataset.step||t.step));
+
+  queueRender();
+});
+document.getElementById("controls").addEventListener("click",async e=>{
+  const id=e.target.id;
+  if(!id)return;
+
+  if(id==="jumpMin"){
+    let best={b:state.bias,e:Infinity};
+    for(let b=-50;b<=120;b+=.1){
+      const v=rmseLine(b,state.slope);
+      if(v<best.e)best={b,e:v};
+    }
+    state.bias=best.b;
+    buildControls();render();
+  }
+  if(id==="gdStep"){
+    if(!state.history.length)state.history.push({bias:state.bias,error:rmseLine(state.bias,state.slope)});
+    const grad=dBias();
+    state.bias-=state.learningRate*grad;
+    state.history.push({bias:state.bias,error:rmseLine(state.bias,state.slope)});
+    buildControls();render();
+  }
+  if(id==="resetGD"){
+    state.bias=20;state.history=[];
+    buildControls();render();
+  }
+  if(id==="gd2Step"){
+    take2DGradientStep();
+    buildControls();render();
+  }
+  if(id==="reset2D"){
+    state.bias=20;
+    state.slope=.3;
+    state.history2D=[];
+    buildControls();render();
+  }
+  if(id==="hingeStep"){
+    const g=hingeGrads(),lr=state.chainLearningRate;
+    state.hinge.a-=lr*g.dA;
+    state.hinge.w-=lr*g.dW;
+    state.hinge.c-=lr*g.dC;
+    state.hinge.outBias-=lr*g.dOut;
+    buildControls();render();
+  }
+  if(id==="netStep"){
+    netStep();
+    buildControls();render();
+  }
+  if(id==="resetNet"){
+    resetTrainingToken();resetNet();
+    buildControls();render();
+  }
+  if(id==="train20")await trainAsync(20);
+  if(id==="train100")await trainAsync(100);
+  if(id==="resetTrain"){
+    resetTrainingToken();
+    resetNet();
+    state.history=[{step:0,error:netLoss()}];
+    buildControls();render();
+  }
+});
+function goPrev(){
+  if(state.scene>0){
+    resetTrainingToken();
+    state.scene--;
+    state.history=[];
+    state.history2D=[];
+    buildScene();
+  }
+}
+document.getElementById("prev").onclick=goPrev;
+document.getElementById("prevTop").onclick=goPrev;
+function goNext(){
+  if(state.scene<7){
+    resetTrainingToken();
+    state.scene++;
+    state.history=[];
+    state.history2D=[];
+    buildScene();
+  }
+}
+document.getElementById("next").onclick=goNext;
+document.getElementById("nextTop").onclick=goNext;
+buildScene();
+</script>
+</body>
+</html>

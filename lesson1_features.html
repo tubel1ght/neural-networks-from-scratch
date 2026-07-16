@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Robot scores based on “features”</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{
+  --bg:#f7f4ec;
+  --card:#ffffff;
+  --ink:#222;
+  --muted:#666;
+  --line:#d7d0c2;
+  --blue:#2563eb;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:var(--bg);
+  color:var(--ink);
+}
+header{
+  background:var(--card);
+  border-bottom:1px solid var(--line);
+  padding:18px 24px;
+}
+h1{margin:0 0 4px;font-size:26px}
+.subtitle{margin:0;color:var(--muted)}
+.wrap{
+  max-width:1280px;
+  margin:0 auto;
+  padding:16px;
+  display:grid;
+  grid-template-columns:390px 1fr;
+  gap:16px;
+  align-items:start;
+}
+.panel{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:16px;
+}
+.controls{
+  position:sticky;
+  top:14px;
+  max-height:calc(100vh - 28px);
+  overflow:auto;
+}
+.plotPanel{
+  min-width:0;
+  padding:8px;
+}
+label{
+  display:block;
+  font-weight:700;
+  margin:12px 0 6px;
+}
+textarea{
+  width:100%;
+  min-height:135px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:10px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:14px;
+  line-height:1.35;
+  background:#fff;
+}
+select,input[type="number"]{
+  width:100%;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:8px;
+  font-size:14px;
+}
+.two{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.small{
+  color:var(--muted);
+  font-size:13px;
+}
+.pill{
+  display:inline-block;
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:3px 9px;
+  color:var(--muted);
+  background:#fffdf7;
+  font-size:12px;
+  margin:3px 3px 3px 0;
+}
+button{
+  border:1px solid #1d4ed8;
+  border-radius:10px;
+  background:var(--blue);
+  color:white;
+  font-weight:700;
+  padding:14px 18px;
+  cursor:pointer;
+  width:100%;
+  font-size:20px;
+}
+button:hover{filter:brightness(.95)}
+#plot{
+  width:100%;
+  height:calc(100vh - 125px);
+  min-height:680px;
+}
+.error{
+  color:#b3261e;
+  font-weight:700;
+  white-space:pre-wrap;
+  display:none;
+}
+@media(max-width:900px){
+  .wrap{
+    grid-template-columns:1fr;
+  }
+  .controls{
+    position:static;
+    max-height:none;
+  }
+  #plot{
+    height:620px;
+    min-height:520px;
+  }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Robot scores based on “features”</h1>
+  <p class="subtitle">Explore how robot scores change as driving speed, driving practice, and shooting reliability vary.</p>
+</header>
+
+<div class="wrap">
+  <section class="panel controls">
+    <span class="pill">x1 = driving speed</span>
+    <span class="pill">x2 = driving practice</span>
+    <span class="pill">x3 = shooting reliability</span>
+
+    <h2>Reality equation</h2>
+    <textarea id="equation" spellcheck="false">0.5
+* exp((x1-50-0.3*x2)^2 / -3000)
+* ln((x2+10)/10)
+* x3</textarea>
+
+    <label>Color points by</label>
+    <select id="colorBy">
+      <option value="none">None</option>
+      <option value="x1">x1 driving speed</option>
+      <option value="x2">x2 driving practice</option>
+      <option value="x3">x3 shooting reliability</option>
+      <option value="score">score</option>
+    </select>
+
+    <h3>Visible slice filters</h3>
+    <p class="small">Choose which generated dots are displayed. The axes stay fixed at 0–100 so slices are visually comparable.</p>
+
+    <label>x1 slice</label>
+    <div class="two">
+      <div><span class="small">start</span><input id="x1SliceMin" type="number" min="0" max="100" step="1" value="0"></div>
+      <div><span class="small">end</span><input id="x1SliceMax" type="number" min="0" max="100" step="1" value="100"></div>
+    </div>
+
+    <label>x2 slice</label>
+    <div class="two">
+      <div><span class="small">start</span><input id="x2SliceMin" type="number" min="0" max="100" step="1" value="0"></div>
+      <div><span class="small">end</span><input id="x2SliceMax" type="number" min="0" max="100" step="1" value="100"></div>
+    </div>
+
+    <label>x3 slice</label>
+    <div class="two">
+      <div><span class="small">start</span><input id="x3SliceMin" type="number" min="0" max="100" step="1" value="0"></div>
+      <div><span class="small">end</span><input id="x3SliceMax" type="number" min="0" max="100" step="1" value="100"></div>
+    </div>
+
+    <div style="margin-top:18px">
+      <button id="applyBtn">Apply</button>
+    </div>
+    <p id="status" class="error"></p>
+  </section>
+
+  <main class="panel plotPanel">
+    <div id="plot"></div>
+  </main>
+</div>
+
+<script>
+const funcs = {
+  exp: Math.exp,
+  ln: Math.log,
+  log: Math.log,
+  pow: Math.pow,
+  sin: Math.sin,
+  cos: Math.cos,
+  tan: Math.tan,
+  sqrt: Math.sqrt,
+  abs: Math.abs,
+  max: Math.max,
+  min: Math.min,
+  floor: Math.floor,
+  ceil: Math.ceil,
+  round: Math.round,
+  PI: Math.PI,
+  E: Math.E
+};
+
+const lockedColorScale = [
+  [0.0, "#fff200"],
+  [0.5, "#2fb47c"],
+  [1.0, "#440154"]
+];
+
+function getNum(id){
+  return Number(document.getElementById(id).value);
+}
+
+function getSlice(feature){
+  let a = getNum(feature + "SliceMin");
+  let b = getNum(feature + "SliceMax");
+  a = Math.max(0, Math.min(100, a));
+  b = Math.max(0, Math.min(100, b));
+  if(a > b) [a,b] = [b,a];
+  return [a,b];
+}
+
+function inVisibleSlice(x1,x2,x3){
+  const [x1a,x1b] = getSlice("x1");
+  const [x2a,x2b] = getSlice("x2");
+  const [x3a,x3b] = getSlice("x3");
+  return x1>=x1a && x1<=x1b && x2>=x2a && x2<=x2b && x3>=x3a && x3<=x3b;
+}
+
+function preprocessEquation(eq){
+  let s = String(eq || "").trim();
+  if(!s) throw new Error("Equation is empty.");
+  s = s.replace(/\bMath\./g,"");
+  s = s.replace(/π/g,"PI");
+  s = s.replace(/\^/g,"**");
+  return s;
+}
+
+function makeEvaluator(){
+  const raw = document.getElementById("equation").value;
+  const parsed = preprocessEquation(raw);
+  const argNames = ["x1","x2","x3",...Object.keys(funcs)];
+  const body = `"use strict"; return (${parsed});`;
+  const fn = new Function(...argNames, body);
+  return {raw, parsed, fn};
+}
+
+function evalScore(obj,x1,x2,x3){
+  const y = obj.fn(x1,x2,x3,...Object.values(funcs));
+  return Number.isFinite(y) ? y : NaN;
+}
+
+function randomBetween(a,b){
+  return a + Math.random() * (b-a);
+}
+
+function makeData(obj){
+  const n = 3000;
+  const xs = [], x2s = [], x3s = [], scores = [];
+  let attempts = 0;
+  const maxAttempts = n * 80;
+
+  while(xs.length < n && attempts < maxAttempts){
+    attempts++;
+    const x1 = randomBetween(0,100);
+    const x2 = randomBetween(0,100);
+    const x3 = randomBetween(0,100);
+    if(!inVisibleSlice(x1,x2,x3)) continue;
+
+    const score = evalScore(obj,x1,x2,x3);
+    if(Number.isFinite(score)){
+      xs.push(x1);
+      x2s.push(x2);
+      x3s.push(x3);
+      scores.push(score);
+    }
+  }
+
+  if(xs.length === 0){
+    throw new Error("No points are visible. Widen the slice filters or check the equation.");
+  }
+
+  return {xs,x2s,x3s,scores};
+}
+
+function colorInfo(d){
+  const colorBy = document.getElementById("colorBy").value;
+  if(colorBy === "none") return {values:null, title:"", phrase:"no coloring"};
+  if(colorBy === "x1") return {values:d.xs, title:"x1 speed", cmin:0, cmax:100};
+  if(colorBy === "x2") return {values:d.x2s, title:"x2 practice", cmin:0, cmax:100};
+  if(colorBy === "x3") return {values:d.x3s, title:"x3 shooting reliability", cmin:0, cmax:100};
+  return {values:d.scores, title:"score", cauto:true};
+}
+
+function showError(message){
+  const el = document.getElementById("status");
+  el.textContent = message;
+  el.style.display = "block";
+}
+
+function clearError(){
+  const el = document.getElementById("status");
+  el.textContent = "";
+  el.style.display = "none";
+}
+
+function updatePlot(){
+  clearError();
+
+  let obj;
+  try{
+    obj = makeEvaluator();
+    const test = evalScore(obj,50,50,50);
+    if(!Number.isFinite(test)) throw new Error("Equation returned a non-finite value at x1=50, x2=50, x3=50.");
+  }catch(e){
+    showError("Equation error: " + e.message);
+    return;
+  }
+
+  let d;
+  try{
+    d = makeData(obj);
+  }catch(e){
+    showError(e.message);
+    return;
+  }
+
+  const c = colorInfo(d);
+  let marker;
+  if(c.values === null){
+    marker = {size:4, color:"#000000", opacity:0.82};
+  }else if(c.cauto){
+    marker = {
+      size:4,
+      color:c.values,
+      colorscale:lockedColorScale,
+      cauto:true,
+      colorbar:{title:c.title},
+      opacity:0.82
+    };
+  }else{
+    marker = {
+      size:4,
+      color:c.values,
+      colorscale:lockedColorScale,
+      cauto:false,
+      cmin:0,
+      cmax:100,
+      colorbar:{title:c.title},
+      opacity:0.82
+    };
+  }
+
+  const trace = {
+    type:"scatter3d",
+    mode:"markers",
+    x:d.xs,
+    y:d.x2s,
+    z:d.scores,
+    marker,
+    text:d.xs.map((x1,i)=>
+      `x1 speed: ${x1.toFixed(1)}<br>`+
+      `x2 practice: ${d.x2s[i].toFixed(1)}<br>`+
+      `x3 shooting reliability: ${d.x3s[i].toFixed(1)}<br>`+
+      `score: ${d.scores[i].toFixed(2)}`
+    ),
+    hoverinfo:"text"
+  };
+
+  const layout = {
+    margin:{l:0,r:0,b:0,t:8},
+    paper_bgcolor:"#ffffff",
+    plot_bgcolor:"#ffffff",
+    scene:{
+      xaxis:{title:"x1 driving speed", range:[0,100]},
+      yaxis:{title:"x2 driving practice", range:[0,100]},
+      zaxis:{title:"score"}
+    },
+    uirevision:"keep-camera"
+  };
+
+  Plotly.react("plot",[trace],layout,{responsive:true,displaylogo:false});
+}
+
+document.getElementById("applyBtn").addEventListener("click", updatePlot);
+["colorBy","x1SliceMin","x1SliceMax","x2SliceMin","x2SliceMax","x3SliceMin","x3SliceMax"].forEach(id=>{
+  document.getElementById(id).addEventListener("input", updatePlot);
+});
+document.getElementById("equation").addEventListener("keydown", e=>{
+  if((e.metaKey || e.ctrlKey) && e.key === "Enter") updatePlot();
+});
+document.getElementById("equation").addEventListener("input", clearError);
+
+updatePlot();
+</script>
+</body>
+</html>

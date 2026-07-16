@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Lesson 3 — Stable Interaction and Error View</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{
+  --bg:#f6f0e5;--card:#fffdf8;--ink:#1d1d1f;--muted:#666;--line:#d8cfc0;
+  --blue:#1d4ed8;--green:#15803d;--orange:#ea580c;--red:#dc2626;--purple:#7c3aed;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
+header{background:#fff;border-bottom:1px solid var(--line);padding:22px 32px}
+h1{margin:0;font-size:34px;letter-spacing:-.5px}.sub{margin:6px 0 0;color:var(--muted);font-size:17px}
+.wrap{max-width:1500px;margin:0 auto;padding:20px;display:grid;grid-template-columns:410px 1fr;gap:20px;align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.side{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto}
+.sceneNo{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--muted);font-size:14px;background:#fff}
+.question{font-size:30px;line-height:1.12;margin:16px 0 8px;font-weight:800}.sentence{font-size:18px;color:#3f3f46;line-height:1.45;margin:0 0 16px}
+label{display:block;font-weight:800;margin:14px 0 6px;font-size:16px}
+input[type=range]{width:100%;accent-color:var(--blue)}
+button{border:1px solid #1d4ed8;background:var(--blue);color:white;border-radius:12px;padding:13px 16px;font-weight:800;cursor:pointer;margin-top:10px;font-size:17px}
+button.secondary{background:#f5f5f5;color:#222;border-color:#999}
+button.fit{background:var(--green);border-color:#166534;width:100%}
+button:disabled{opacity:.55;cursor:wait}
+.nav{display:flex;gap:10px;margin-top:18px}.nav button{width:50%}
+.value{float:right;font-weight:900}.metric{font-size:32px;font-weight:900;margin:12px 0}
+.eq{font-family:ui-monospace,Menlo,Consolas,monospace;background:#f3f0ea;border:1px solid #e5ded2;border-radius:12px;padding:14px;white-space:pre-wrap;line-height:1.5;font-size:13px}
+.note{background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;margin-top:12px;font-size:14px;line-height:1.45}
+.realityBox{background:#e0f2fe;border:1px solid #7dd3fc;border-radius:14px;padding:14px;margin:12px 0 18px}
+.realityTitle{font-size:17px;font-weight:900;color:#0c4a6e}.realityText{font-size:13px;color:#075985;margin-top:4px}
+.rampBox{background:#f5f3ff;border:1px solid #c4b5fd;border-radius:14px;padding:14px;margin:12px 0}
+.rampTitle{font-size:17px;font-weight:900;color:#4c1d95}
+#mainPlot{width:100%;height:650px}
+.plotGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.plotCard{border:1px solid #eadfce;border-radius:14px;background:#fff;padding:8px}
+.plotTitle{text-align:center;font-weight:900;margin:4px 0 2px}
+.smallPlot{height:330px}
+#network{width:100%;height:500px;border:1px solid #eadfce;border-radius:16px;background:#fff;display:none}
+.node{fill:#fff;stroke:#111827;stroke-width:2.2}.hidden{fill:#eff6ff;stroke:#1d4ed8;stroke-width:2.2}.out{fill:#ecfdf5;stroke:#15803d;stroke-width:2.4}.err{fill:#fff7ed;stroke:#ea580c;stroke-width:2.2}
+.edge{stroke:#555;stroke-width:1.8}.wlabel{font-size:13px;fill:#dc2626;font-weight:800;text-anchor:middle}.alabel{font-size:13px;fill:#ea580c;font-weight:800;text-anchor:middle}.layer{font-size:16px;fill:#111;text-anchor:middle;font-weight:900}
+.countCard{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:16px}
+.countItem{background:#fff;border:1px solid #ddd;border-radius:14px;padding:18px;text-align:center}.countBig{font-size:38px;font-weight:900}
+@media(max-width:1000px){.wrap{grid-template-columns:1fr}.side{position:static;max-height:none}.plotGrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>Lesson 3: Building Landscapes from Ramps</h1>
+<p class="sub">How a second feature turns a hinge into a ramp—and why many ramps create a neural network.</p>
+</header>
+
+<div class="wrap">
+<section class="panel side">
+  <span class="sceneNo" id="sceneNo"></span>
+  <div class="question" id="question"></div>
+  <p class="sentence" id="sentence"></p>
+  <div id="controls"></div>
+  <div class="nav">
+    <button class="secondary" id="prev">← Back</button>
+    <button id="next">Next →</button>
+  </div>
+</section>
+
+<main class="panel">
+  <div id="plotArea"></div>
+  <svg id="network" viewBox="0 0 1100 500"></svg>
+  <div id="countArea"></div>
+</main>
+</div>
+
+<script>
+const N=31;
+const axis=Array.from({length:N},(_,i)=>100*i/(N-1));
+const trainAxis=Array.from({length:11},(_,i)=>100*i/10);
+const state={
+  scene:0,
+  x3:50,
+  outBias:0,
+  ramps:[
+    {w1:1.0,w2:0.4,b:-55,a:1},
+    {w1:-0.8,w2:0.9,b:-15,a:1},
+    {w1:0.5,w2:-1.0,b:30,a:-1}
+  ],
+  camera:{eye:{x:1.55,y:1.55,z:1.15}}
+};
+const scenes=[
+["What happens when a hinge gets a second input?","Explore one adjustable ramp. Two input weights control its tilt; one bias controls where the flat region meets the slope."],
+["Where does the ramp turn on?","Reveal the activation boundary: one side is flat at zero; the other side is a sloped plane."],
+["How do the weights rotate the boundary?","Compare the 3D ramp with a top-down view. Changing w₁ and w₂ rotates the cut through feature space."],
+["What two-feature reality are we trying to model?","Now reveal the robot-score landscape produced by driving speed and driving practice."],
+["Can one ramp fit the landscape?","Try one ramp against reality. A single planar bend cannot capture the whole curved landscape."],
+["Can two ramps do better?","Add two independently oriented ramps and inspect their individual contributions and their sum."],
+["Does a third ramp help?","A third basis function increases expressiveness and reduces the best attainable error."],
+["Where is the neural network?","The same three-ramp model is now shown as a standard two-input, one-hidden-layer neural network."],
+["Why do we need learning?","Even this tiny model already has many parameters. Larger models make manual tuning impossible."]
+];
+
+function relu(z){return Math.max(0,z)}
+function reality(x1,x2){
+  return 0.5*Math.exp(((x1-50-0.3*x2)**2)/-3000)*Math.log((x2+10)/10)*state.x3;
+}
+function rampValue(r,x1,x2){return r.a*relu(r.w1*x1+r.w2*x2+r.b)}
+function activeK(){return state.scene<5?1:state.scene===5?2:3}
+function modelValue(x1,x2,k=activeK()){
+  let y=state.outBias;
+  for(let i=0;i<k;i++)y+=rampValue(state.ramps[i],x1,x2);
+  return y;
+}
+function grid(fn,arr=axis){return arr.map(y=>arr.map(x=>fn(x,y)))}
+function rmse(k=activeK()){
+  let s=0,n=0;
+  for(const x2 of trainAxis)for(const x1 of trainAxis){
+    const e=modelValue(x1,x2,k)-reality(x1,x2);s+=e*e;n++;
+  }
+  return Math.sqrt(s/n);
+}
+function sceneLayout(title,zRange=[0,120]){
+  return {
+    title:{text:title,font:{size:16}},
+    margin:{l:0,r:0,t:45,b:0},
+    paper_bgcolor:"#fff",plot_bgcolor:"#fff",
+    scene:{
+      xaxis:{title:"Driving speed x₁",range:[0,100]},
+      yaxis:{title:"Driving practice x₂",range:[0,100]},
+      zaxis:{title:"Score / ramp output",range:zRange},
+      camera:state.camera,
+      aspectmode:"cube"
+    },
+    showlegend:false
+  };
+}
+function surfaceTrace(z,name,opacity=1,colorscale="Viridis"){
+  return {type:"surface",x:axis,y:axis,z,name,opacity,colorscale,showscale:false,hovertemplate:"x₁=%{x:.1f}<br>x₂=%{y:.1f}<br>z=%{z:.2f}<extra></extra>"};
+}
+function boundaryTrace(r){
+  const pts=[];
+  if(Math.abs(r.w2)>1e-8){
+    for(const x of axis){
+      const y=-(r.w1*x+r.b)/r.w2;
+      if(y>=0&&y<=100)pts.push([x,y]);
+    }
+  }else if(Math.abs(r.w1)>1e-8){
+    const x=-r.b/r.w1;
+    if(x>=0&&x<=100)for(const y of axis)pts.push([x,y]);
+  }
+  return {type:"scatter3d",mode:"lines",x:pts.map(p=>p[0]),y:pts.map(p=>p[1]),z:pts.map(()=>0),line:{width:8},name:"Activation boundary",hoverinfo:"skip"};
+}
+function topDownData(r){
+  const z=grid((x1,x2)=>r.w1*x1+r.w2*x2+r.b);
+  return [
+    {type:"heatmap",x:axis,y:axis,z,colorscale:"RdBu",zmid:0,showscale:false,hovertemplate:"x₁=%{x:.1f}<br>x₂=%{y:.1f}<br>pre-activation=%{z:.2f}<extra></extra>"},
+    {type:"contour",x:axis,y:axis,z,contours:{start:0,end:0,size:1,coloring:"lines"},line:{width:4},showscale:false,hoverinfo:"skip"}
+  ];
+}
+function bindCamera(id){
+  const el=document.getElementById(id);
+  if(!el||el._cameraBound)return;
+  el._cameraBound=true;
+  el.on("plotly_relayout",ev=>{
+    if(ev["scene.camera"]&&!cameraSyncInProgress)state.camera=ev["scene.camera"];
+  });
+}
+let cameraSyncInProgress=false;
+function syncCameras(ids){
+  ids.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el||el._syncBound)return;
+    el._syncBound=true;
+    el.on("plotly_relayout",ev=>{
+      if(!ev["scene.camera"]||cameraSyncInProgress)return;
+      state.camera=ev["scene.camera"];
+      cameraSyncInProgress=true;
+      const updates=ids
+        .filter(other=>other!==id&&document.getElementById(other))
+        .map(other=>Plotly.relayout(other,{"scene.camera":state.camera}));
+      Promise.allSettled(updates).finally(()=>{cameraSyncInProgress=false;});
+    });
+  });
+}
+function slider(path,label,value,min,max,step){
+  const rid="readout_"+path.replaceAll(".","_");
+  return `<label>${label}<span class="value" id="${rid}">${Number(value).toFixed(step<1?2:0)}</span></label>
+  <input type="range" data-path="${path}" data-step="${step}" min="${min}" max="${max}" step="${step}" value="${value}">`;
+}
+function subscriptNumber(n){
+  const map={"0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉"};
+  return String(n).split("").map(ch=>map[ch]||ch).join("");
+}
+function weightName(hiddenIndex,inputIndex){
+  return "w"+subscriptNumber(hiddenIndex+1)+subscriptNumber(inputIndex+1);
+}
+function rampControls(i){
+  const r=state.ramps[i];
+  return `<div class="rampBox"><div class="rampTitle">Ramp ${i+1}</div>
+  ${slider(`ramps.${i}.w1`,`Weight ${weightName(i,0)}`,r.w1,-3,3,.05)}
+  ${slider(`ramps.${i}.w2`,`Weight ${weightName(i,1)}`,r.w2,-3,3,.05)}
+  ${slider(`ramps.${i}.b`,`Bias b${subscriptNumber(i+1)}`,r.b,-200,200,1)}
+  <label>Output direction a${subscriptNumber(i+1)}</label>
+  <div style="display:flex;gap:18px">
+    <label style="font-weight:600;margin:0"><input type="radio" name="a${i}" data-a="${i}" value="1" ${r.a===1?"checked":""}> +1</label>
+    <label style="font-weight:600;margin:0"><input type="radio" name="a${i}" data-a="${i}" value="-1" ${r.a===-1?"checked":""}> −1</label>
+  </div></div>`;
+}
+function equation(k=activeK()){
+  const lines=[`${state.outBias.toFixed(2)}`];
+  for(let i=0;i<k;i++){
+    const r=state.ramps[i];
+    lines.push(`${r.a>0?"+":"-"} ReLU(${r.w1.toFixed(2)}x₁ ${r.w2>=0?"+":"-"} ${Math.abs(r.w2).toFixed(2)}x₂ ${r.b>=0?"+":"-"} ${Math.abs(r.b).toFixed(1)})`);
+  }
+  return "model(x₁,x₂) =\n  "+lines.join("\n  ");
+}
+function buildControls(){
+  let h="";
+  if(state.scene>=3 && state.scene<=7){
+    h+=`<div class="realityBox"><div class="realityTitle">Reality setup</div>
+    <div class="realityText">Default: 50. Keep it fixed while comparing models, or move it to see how the target landscape changes.</div>
+    ${slider("x3","Shooting reliability",state.x3,10,100,1)}</div>`;
+  }
+  if(state.scene<=2){
+    h+=rampControls(0);
+    h+=`<div class="note"><b>One ramp:</b> z=max(0,w₁x₁+w₂x₂+b). The weights tilt and rotate it; the bias shifts the activation boundary.</div>`;
+  }else if(state.scene===3){
+    h+=`<div class="note">Reality depends nonlinearly on both inputs. Rotate the surface and look for the speed “sweet spot” shifting with practice.</div>`;
+  }else if(state.scene>=4 && state.scene<=7){
+    h+=slider("outBias","Output bias",state.outBias,-100,120,.5);
+    const k=state.scene===4?1:state.scene===5?2:3;
+    for(let i=0;i<k;i++)h+=rampControls(i);
+    h+=`<button class="fit" id="best">Best fit</button>
+         <div class="metric" id="errorBox">Error: ${rmse(k).toFixed(3)}</div>
+         <div class="eq" id="modelEq">${equation(k)}</div>`;
+  }else if(state.scene===8){
+    h+=`<div class="note">A model with H hidden ramps and D inputs has approximately H(D+2)+1 parameters: D input weights, one hidden bias, one output weight per ramp, plus an output bias.</div>`;
+  }
+  document.getElementById("controls").innerHTML=h;
+}
+function setPath(path,val){
+  const parts=path.split(".");
+  if(parts.length===1)state[parts[0]]=val;
+  else state[parts[0]][Number(parts[1])][parts[2]]=val;
+}
+const fitCache=new Map();
+
+const fitSamples=[];
+for(const x2 of trainAxis){
+  for(const x1 of trainAxis){
+    fitSamples.push({x1,x2,y:reality(x1,x2)});
+  }
+}
+
+function refreshFitSamples(){
+  let idx=0;
+  for(const x2 of trainAxis){
+    for(const x1 of trainAxis){
+      fitSamples[idx++].y=reality(x1,x2);
+    }
+  }
+}
+
+function oneRampFitForCandidate(u1,u2,t){
+  // Model: bias + q * ReLU(u1*x1 + u2*x2 + t)
+  // Solve bias and q directly from two-variable least squares.
+  let n=0,sumH=0,sumY=0,sumHH=0,sumHY=0;
+  for(const s of fitSamples){
+    const h=relu(u1*s.x1+u2*s.x2+t);
+    n++;
+    sumH+=h;
+    sumY+=s.y;
+    sumHH+=h*h;
+    sumHY+=h*s.y;
+  }
+  const det=n*sumHH-sumH*sumH;
+  let bias,q;
+  if(Math.abs(det)<1e-12){
+    q=0;
+    bias=sumY/n;
+  }else{
+    bias=(sumY*sumHH-sumH*sumHY)/det;
+    q=(n*sumHY-sumH*sumY)/det;
+  }
+
+  let sse=0;
+  for(const s of fitSamples){
+    const h=relu(u1*s.x1+u2*s.x2+t);
+    const e=(bias+q*h)-s.y;
+    sse+=e*e;
+  }
+  return {bias,q,err:Math.sqrt(sse/n)};
+}
+
+function candidateGrid(){
+  const arr=[];
+  for(let deg=0;deg<360;deg+=30){
+    const rad=deg*Math.PI/180;
+    const u1=Math.cos(rad),u2=Math.sin(rad);
+    for(let t=-120;t<=120;t+=20){
+      arr.push({u1,u2,t,deg});
+    }
+  }
+  return arr;
+}
+const CANDIDATES=candidateGrid();
+
+function fitOneRampFast(){
+  let best=null;
+  for(const c of CANDIDATES){
+    const fit=oneRampFitForCandidate(c.u1,c.u2,c.t);
+    if(!best||fit.err<best.fit.err)best={c,fit};
+  }
+
+  // Tiny local refinement around the best coarse candidate.
+  let current=best;
+  for(const dDeg of [-10,-5,0,5,10]){
+    for(const dT of [-10,-5,0,5,10]){
+      const deg=(best.c.deg+dDeg+360)%360;
+      const rad=deg*Math.PI/180;
+      const c={u1:Math.cos(rad),u2:Math.sin(rad),t:best.c.t+dT,deg};
+      const fit=oneRampFitForCandidate(c.u1,c.u2,c.t);
+      if(fit.err<current.fit.err)current={c,fit};
+    }
+  }
+  return current;
+}
+
+function residualSamples(k){
+  const arr=[];
+  for(const s of fitSamples){
+    let pred=state.outBias;
+    for(let i=0;i<k;i++)pred+=rampValue(state.ramps[i],s.x1,s.x2);
+    arr.push({x1:s.x1,x2:s.x2,y:s.y-pred});
+  }
+  return arr;
+}
+
+function fitAdditionalRampFast(existingK){
+  // Fit one additional ramp to the current residual.
+  const residual=residualSamples(existingK);
+  let best=null;
+
+  for(const c of CANDIDATES){
+    let n=0,sumH=0,sumY=0,sumHH=0,sumHY=0;
+    for(const s of residual){
+      const h=relu(c.u1*s.x1+c.u2*s.x2+c.t);
+      n++;sumH+=h;sumY+=s.y;sumHH+=h*h;sumHY+=h*s.y;
+    }
+    const det=n*sumHH-sumH*sumH;
+    let biasAdj=0,q=0;
+    if(Math.abs(det)>=1e-12){
+      biasAdj=(sumY*sumHH-sumH*sumHY)/det;
+      q=(n*sumHY-sumH*sumY)/det;
+    }
+    let sse=0;
+    for(const s of residual){
+      const h=relu(c.u1*s.x1+c.u2*s.x2+c.t);
+      const e=(biasAdj+q*h)-s.y;
+      sse+=e*e;
+    }
+    const err=Math.sqrt(sse/n);
+    if(!best||err<best.err)best={c,q,biasAdj,err};
+  }
+  return best;
+}
+
+function applyRampFromBasis(index,c,q){
+  const mag=Math.abs(q);
+  state.ramps[index]={
+    w1:mag*c.u1,
+    w2:mag*c.u2,
+    b:mag*c.t,
+    a:q<0?-1:1
+  };
+}
+
+function fitBiasExactly(k){
+  let sum=0,n=0;
+  for(const s of fitSamples){
+    let contrib=0;
+    for(let i=0;i<k;i++)contrib+=rampValue(state.ramps[i],s.x1,s.x2);
+    sum+=s.y-contrib;
+    n++;
+  }
+  state.outBias=sum/n;
+}
+
+async function bestFit(){
+  const k=state.scene===4?1:state.scene===5?2:3;
+  const btn=document.getElementById("best");
+  if(btn){btn.disabled=true;btn.textContent="Fitting…";}
+  await new Promise(r=>setTimeout(r,10));
+
+  refreshFitSamples();
+  const key=`${state.x3.toFixed(3)}|${k}`;
+
+  if(fitCache.has(key)){
+    const cached=fitCache.get(key);
+    state.outBias=cached.outBias;
+    for(let i=0;i<k;i++)state.ramps[i]={...cached.ramps[i]};
+  }else{
+    const first=fitOneRampFast();
+    state.outBias=first.fit.bias;
+    applyRampFromBasis(0,first.c,first.fit.q);
+    fitBiasExactly(1);
+
+    for(let i=1;i<k;i++){
+      const add=fitAdditionalRampFast(i);
+      state.outBias+=add.biasAdj;
+      applyRampFromBasis(i,add.c,add.q);
+      fitBiasExactly(i+1);
+    }
+
+    fitCache.set(key,{
+      outBias:state.outBias,
+      ramps:state.ramps.slice(0,k).map(r=>({...r}))
+    });
+  }
+
+  buildControls();
+  renderScene();
+}
+function renderSingleRamp(boundary=false){
+  if(!document.getElementById("mainPlot"))document.getElementById("plotArea").innerHTML='<div id="mainPlot"></div>';
+  const r=state.ramps[0];
+  const traces=[surfaceTrace(grid((x1,x2)=>relu(r.w1*x1+r.w2*x2+r.b)),"Ramp",.95,"Blues")];
+  if(boundary)traces.push(boundaryTrace(r));
+  Plotly.react("mainPlot",traces,sceneLayout(boundary?"Ramp and activation boundary":"One adjustable ramp",[-10,120]),{responsive:true,displaylogo:false});
+  bindCamera("mainPlot");
+}
+function renderSplit(){
+  if(!document.getElementById("ramp3d"))document.getElementById("plotArea").innerHTML=`<div class="plotGrid">
+  <div class="plotCard"><div class="plotTitle">3D ramp</div><div id="ramp3d" class="smallPlot"></div></div>
+  <div class="plotCard"><div class="plotTitle">Top-down pre-activation view</div><div id="top2d" class="smallPlot"></div></div></div>`;
+  const r=state.ramps[0];
+  Plotly.react("ramp3d",[surfaceTrace(grid((x1,x2)=>relu(r.w1*x1+r.w2*x2+r.b)),"Ramp",.95,"Blues"),boundaryTrace(r)],sceneLayout("",[-10,120]),{responsive:true,displaylogo:false});
+  Plotly.react("top2d",topDownData(r),{margin:{l:55,r:15,t:15,b:50},xaxis:{title:"Driving speed x₁",range:[0,100]},yaxis:{title:"Driving practice x₂",range:[0,100],scaleanchor:"x"},paper_bgcolor:"#fff",plot_bgcolor:"#fff",showlegend:false},{responsive:true,displaylogo:false});
+  bindCamera("ramp3d");
+}
+function renderReality(){
+  if(!document.getElementById("mainPlot"))document.getElementById("plotArea").innerHTML='<div id="mainPlot"></div>';
+  Plotly.react("mainPlot",[surfaceTrace(grid(reality),"Reality",1,"Viridis")],sceneLayout("Robot-score reality",[0,120]),{responsive:true,displaylogo:false});
+  bindCamera("mainPlot");
+}
+function renderFitScene(k){
+  const cards=[["Reality","realityPlot"],["Model sum","sumPlot"]];
+  for(let i=0;i<k;i++)cards.push([`Ramp ${i+1}`,`rampPlot${i}`]);
+  const expected=`rampPlot${k-1}`;
+  if(!document.getElementById("realityPlot")||!document.getElementById(expected)){
+    document.getElementById("plotArea").innerHTML='<div class="plotGrid">'+cards.map(([t,id])=>`<div class="plotCard"><div class="plotTitle">${t}</div><div id="${id}" class="smallPlot"></div></div>`).join("")+'</div>';
+  }
+  Plotly.react("realityPlot",[surfaceTrace(grid(reality),"Reality",1,"Viridis")],sceneLayout("",[-30,120]),{responsive:true,displaylogo:false});
+  Plotly.react("sumPlot",[surfaceTrace(grid((x1,x2)=>modelValue(x1,x2,k)),"Model",1,"Blues")],sceneLayout("",[-30,120]),{responsive:true,displaylogo:false});
+  for(let i=0;i<k;i++)Plotly.react(`rampPlot${i}`,[surfaceTrace(grid((x1,x2)=>rampValue(state.ramps[i],x1,x2)),`Ramp ${i+1}`,1,i===0?"Reds":i===1?"Greens":"Purples")],sceneLayout("",[-80,120]),{responsive:true,displaylogo:false});
+  syncCameras(["realityPlot","sumPlot",...Array.from({length:k},(_,i)=>`rampPlot${i}`)]);
+}
+function renderNetwork(){
+  if(!document.getElementById("sumPlot")){
+    document.getElementById("plotArea").innerHTML='<div id="sumPlot" style="height:430px"></div>';
+  }
+  Plotly.react(
+    "sumPlot",
+    [surfaceTrace(grid((x1,x2)=>modelValue(x1,x2,3)),"Model",1,"Blues")],
+    sceneLayout("Three-ramp model",[-30,120]),
+    {responsive:true,displaylogo:false}
+  );
+  bindCamera("sumPlot");
+
+  const svg=document.getElementById("network");
+  svg.style.display="block";
+  let s="";
+
+  function edge(x1,y1,x2,y2,label,lx,ly,cls="wlabel"){
+    s+=`<line class="edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    if(label)s+=`<text class="${cls}" x="${lx}" y="${ly}">${label}</text>`;
+  }
+  function rect(x,y,w,h,cls,l1,l2=""){
+    s+=`<rect class="${cls}" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="18"/>`;
+    s+=`<text x="${x}" y="${y-(l2?8:0)}" text-anchor="middle" style="font-size:14px;font-weight:800">${l1}</text>`;
+    if(l2)s+=`<text x="${x}" y="${y+15}" text-anchor="middle" style="font-size:12px;fill:#666">${l2}</text>`;
+  }
+
+  s+=`<text class="layer" x="110" y="35">Inputs</text>`;
+  s+=`<text class="layer" x="515" y="35">Hidden ramps</text>`;
+  s+=`<text class="layer" x="850" y="35">Output</text>`;
+  s+=`<text class="layer" x="1020" y="35">Error</text>`;
+
+  rect(110,155,155,65,"node","Driving speed","x₁");
+  rect(110,330,155,65,"node","Driving practice","x₂");
+
+  const ys=[105,245,385];
+  ys.forEach((y,i)=>{
+    const r=state.ramps[i];
+    const w1=weightName(i,0);
+    const w2=weightName(i,1);
+    const b="b"+subscriptNumber(i+1);
+    const a="a"+subscriptNumber(i+1);
+
+    edge(188,155,380,y,`${w1}=${r.w1.toFixed(2)}`,282,(155+y)/2-7);
+    edge(188,330,380,y,`${w2}=${r.w2.toFixed(2)}`,282,(330+y)/2+14);
+
+    rect(
+      515,y,270,85,"hidden",
+      `ReLU(${w1}x₁ + ${w2}x₂ + ${b})`,
+      `${b}=${r.b.toFixed(2)}`
+    );
+
+    edge(
+      650,y,770,245,
+      `${a}=${r.a>0?"+1":"−1"}`,
+      710,(y+245)/2-8,
+      "alabel"
+    );
+  });
+
+  rect(
+    850,245,150,104,"out",
+    "y = sum(inputs) + bias",
+    `bias=${state.outBias.toFixed(2)}`
+  );
+
+  edge(925,245,972,245,"",0,0);
+  rect(
+    1020,245,90,104,"err",
+    "Error",
+    rmse(3).toFixed(3)
+  );
+
+  svg.innerHTML=s;
+}
+function renderCounts(){
+  document.getElementById("plotArea").innerHTML='';
+  document.getElementById("network").style.display="none";
+  const examples=[
+    ["1 ramp, 2 inputs",5],
+    ["3 ramps, 2 inputs",13],
+    ["10 ramps, 2 inputs",41],
+    ["100 ramps, 20 inputs",2201]
+  ];
+  document.getElementById("countArea").innerHTML=`<div class="note" style="font-size:20px;text-align:center"><b>Would you like to tune all of these by hand?</b><br><br>Lesson 4 will show how gradients tell every parameter which way to move.</div><div class="countCard">`+
+  examples.map(([name,n])=>`<div class="countItem"><div>${name}</div><div class="countBig">${n}</div><div>trainable parameters</div></div>`).join("")+`</div>`;
+}
+function renderScene(){
+  document.getElementById("network").style.display="none";
+  document.getElementById("countArea").innerHTML="";
+  if(state.scene===0)renderSingleRamp(false);
+  else if(state.scene===1)renderSingleRamp(true);
+  else if(state.scene===2)renderSplit();
+  else if(state.scene===3)renderReality();
+  else if(state.scene===4)renderFitScene(1);
+  else if(state.scene===5)renderFitScene(2);
+  else if(state.scene===6)renderFitScene(3);
+  else if(state.scene===7)renderNetwork();
+  else renderCounts();
+}
+let renderTimer=null;
+function updateControlReadout(target){
+  if(target.dataset.path){
+    const id="readout_"+target.dataset.path.replaceAll(".","_");
+    const el=document.getElementById(id);
+    if(el){
+      const step=Number(target.dataset.step||1);
+      el.textContent=Number(target.value).toFixed(step<1?2:0);
+    }
+  }
+  const k=state.scene===4?1:state.scene===5?2:state.scene>=6&&state.scene<=7?3:activeK();
+  const err=document.getElementById("errorBox");
+  if(err&&state.scene>=4&&state.scene<=7)err.textContent="Error: "+rmse(k).toFixed(3);
+  const eq=document.getElementById("modelEq");
+  if(eq&&state.scene>=4&&state.scene<=7)eq.textContent=equation(k);
+}
+function scheduleRender(){
+  clearTimeout(renderTimer);
+  renderTimer=setTimeout(()=>renderScene(),75);
+}
+function updateHeader(){
+  document.getElementById("sceneNo").textContent=`Scene ${state.scene+1} of 9`;
+  document.getElementById("question").textContent=scenes[state.scene][0];
+  document.getElementById("sentence").textContent=scenes[state.scene][1];
+  document.getElementById("prev").disabled=state.scene===0;
+  document.getElementById("next").textContent=state.scene===8?"Done":"Next →";
+}
+function buildScene(){
+  updateHeader();
+  buildControls();
+  document.getElementById("plotArea").innerHTML="";
+  renderScene();
+}
+document.getElementById("controls").addEventListener("input",e=>{
+  const t=e.target;
+  if(t.dataset.path)setPath(t.dataset.path,Number(t.value));
+  else if(t.dataset.a!==undefined)state.ramps[Number(t.dataset.a)].a=Number(t.value);
+  updateControlReadout(t);
+});
+
+document.getElementById("controls").addEventListener("change",e=>{
+  const t=e.target;
+  if(t.dataset.path)setPath(t.dataset.path,Number(t.value));
+  else if(t.dataset.a!==undefined)state.ramps[Number(t.dataset.a)].a=Number(t.value);
+  buildControls();
+  renderScene();
+});
+document.getElementById("controls").addEventListener("click",e=>{if(e.target.id==="best")bestFit()});
+document.getElementById("prev").onclick=()=>{if(state.scene>0){state.scene--;buildScene()}};
+document.getElementById("next").onclick=()=>{if(state.scene<8){state.scene++;buildScene()}};
+buildScene();
+</script>
+</body>
+</html>
