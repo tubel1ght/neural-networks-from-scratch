@@ -39,23 +39,23 @@ footer{max-width:1000px;margin:0 auto;padding:0 24px 50px;color:var(--muted);fon
 <header>
   <div class="headInner">
     <h1>Neural Networks from Scratch</h1>
-    <p class="sub">An interactive course that builds a neural network one honest step at a time — starting from a robot's score, ending at backpropagation. Move the sliders. Watch the model respond. No math background required.</p>
+    <p class="sub">An interactive course that builds a neural network one honest step at a time — starting from a single robot shot, ending at backpropagation. Move the sliders. Watch the model respond. No math background required.</p>
   </div>
 </header>
 
 <div class="wrap">
   <section class="intro">
     <h2>One story, all the way through</h2>
-    <p>Every lesson models the same imaginary "reality": how well a competition robot <b>scores</b> based on three features — its <b>driving speed</b>, how much <b>driving practice</b> the team has put in, and its <b>shooting reliability</b>. You'll start by exploring that reality, then slowly learn to <em>rebuild it</em> yourself out of simple bendable pieces — which turns out to be exactly what a neural network does.</p>
-    <div class="eq">score = 0.5 · exp((x1 − 50 − 0.3·x2)² / −3000) · ln((x2 + 10) / 10) · x3</div>
-    <p class="eqNote">You never have to understand this formula. It's just the hidden "truth" the model is trying to learn — the same truth in every lesson.</p>
+    <p>Every lesson models the same imaginary "reality": how likely a robot's shot is to go in, based on three things you could read off a photo of the shot — its <b>arc</b> (x1), its <b>closeness to the goal</b> (x2), and how <b>clear the shot</b> is (x3). You'll start by exploring that reality, then slowly learn to <em>rebuild it</em> yourself out of simple bendable pieces — which turns out to be exactly what a neural network does.</p>
+    <div class="eq">make % = 100 · exp((x1 − 50 − 0.3·x2)² / −3000) · ln((x2 + 10) / 10) / ln(11) · (x3 / 100)</div>
+    <p class="eqNote">You never have to understand this formula. It's just the hidden "truth" the model is trying to learn — the same truth in every lesson. (x1 = shot arc, x2 = closeness to goal, x3 = shot clearness.)</p>
   </section>
 
   <div class="grid">
     <a class="card" href="lesson1_features.html">
       <span class="badge b1">Lesson 1</span>
       <h3>Features</h3>
-      <p>Reality is a function of inputs. Explore in 3D how a robot's score changes as its speed, practice, and shooting reliability vary.</p>
+      <p>Reality is a function of inputs. Explore in 3D how a shot's make-probability changes with its arc, closeness to the goal, and clearness.</p>
       <div class="tags"><span class="tag">3D exploration</span><span class="tag">intuition</span></div>
       <div class="go">Start exploring →</div>
     </a>
@@ -76,7 +76,7 @@ footer{max-width:1000px;margin:0 auto;padding:0 24px 50px;color:var(--muted);fon
       <div class="go">Open lesson →</div>
     </a>
 
-    <a class="card" href="lesson4_computational_graph_v11_learning_rates.html">
+    <a class="card" href="lesson4_learning.html">
       <span class="badge b4">Lesson 4</span>
       <h3>How the Computer Learns</h3>
       <p>Too many knobs to tune by hand. See how error, derivatives, gradient descent, and backpropagation let the computer tune itself.</p>

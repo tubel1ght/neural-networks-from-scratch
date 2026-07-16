@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Lesson 3 — Stable Interaction and Error View</title>
+<title>Lesson 3 — Building Landscapes from Ramps</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
 :root{
@@ -14,6 +14,10 @@
 body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
 header{background:#fff;border-bottom:1px solid var(--line);padding:22px 32px}
 h1{margin:0;font-size:34px;letter-spacing:-.5px}.sub{margin:6px 0 0;color:var(--muted);font-size:17px}
+.lessonNav{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.lessonNav a{text-decoration:none;font-size:14px;font-weight:700;color:#3f3f46;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+.lessonNav a:hover{border-color:#c3b9a6}
+.lessonNav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 .wrap{max-width:1500px;margin:0 auto;padding:20px;display:grid;grid-template-columns:410px 1fr;gap:20px;align-items:start}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
 .side{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto}
@@ -50,6 +54,13 @@ button:disabled{opacity:.55;cursor:wait}
 <header>
 <h1>Lesson 3: Building Landscapes from Ramps</h1>
 <p class="sub">How a second feature turns a hinge into a ramp—and why many ramps create a neural network.</p>
+<nav class="lessonNav">
+<a href="index.html">Home</a>
+<a href="lesson1_features.html">1 · Features</a>
+<a href="lesson2_hinges.html">2 · Hinges</a>
+<a href="lesson3_ramps.html" class="active">3 · Ramps</a>
+<a href="lesson4_learning.html">4 · Learning</a>
+</nav>
 </header>
 
 <div class="wrap">
@@ -90,7 +101,7 @@ const scenes=[
 ["What happens when a hinge gets a second input?","Explore one adjustable ramp. Two input weights control its tilt; one bias controls where the flat region meets the slope."],
 ["Where does the ramp turn on?","Reveal the activation boundary: one side is flat at zero; the other side is a sloped plane."],
 ["How do the weights rotate the boundary?","Compare the 3D ramp with a top-down view. Changing w₁ and w₂ rotates the cut through feature space."],
-["What two-feature reality are we trying to model?","Now reveal the robot-score landscape produced by driving speed and driving practice."],
+["What two-feature reality are we trying to model?","Now reveal the make-probability landscape produced by a shot's arc and its closeness to the goal."],
 ["Can one ramp fit the landscape?","Try one ramp against reality. A single planar bend cannot capture the whole curved landscape."],
 ["Can two ramps do better?","Add two independently oriented ramps and inspect their individual contributions and their sum."],
 ["Does a third ramp help?","A third basis function increases expressiveness and reduces the best attainable error."],
@@ -100,7 +111,7 @@ const scenes=[
 
 function relu(z){return Math.max(0,z)}
 function reality(x1,x2){
-  return 0.5*Math.exp(((x1-50-0.3*x2)**2)/-3000)*Math.log((x2+10)/10)*state.x3;
+  return 100*Math.exp(((x1-50-0.3*x2)**2)/-3000)*(Math.log((x2+10)/10)/Math.log(11))*(state.x3/100);
 }
 function rampValue(r,x1,x2){return r.a*relu(r.w1*x1+r.w2*x2+r.b)}
 function activeK(){return state.scene<5?1:state.scene===5?2:3}
@@ -123,9 +134,9 @@ function sceneLayout(title,zRange=[0,120]){
     margin:{l:0,r:0,t:45,b:0},
     paper_bgcolor:"#fff",plot_bgcolor:"#fff",
     scene:{
-      xaxis:{title:"Driving speed x₁",range:[0,100]},
-      yaxis:{title:"Driving practice x₂",range:[0,100]},
-      zaxis:{title:"Score / ramp output",range:zRange},
+      xaxis:{title:"Shot arc x₁",range:[0,100]},
+      yaxis:{title:"Closeness x₂",range:[0,100]},
+      zaxis:{title:"Make % / ramp output",range:zRange},
       camera:state.camera,
       aspectmode:"cube"
     },
@@ -217,13 +228,13 @@ function buildControls(){
   if(state.scene>=3 && state.scene<=7){
     h+=`<div class="realityBox"><div class="realityTitle">Reality setup</div>
     <div class="realityText">Default: 50. Keep it fixed while comparing models, or move it to see how the target landscape changes.</div>
-    ${slider("x3","Shooting reliability",state.x3,10,100,1)}</div>`;
+    ${slider("x3","Shot clearness",state.x3,10,100,1)}</div>`;
   }
   if(state.scene<=2){
     h+=rampControls(0);
     h+=`<div class="note"><b>One ramp:</b> z=max(0,w₁x₁+w₂x₂+b). The weights tilt and rotate it; the bias shifts the activation boundary.</div>`;
   }else if(state.scene===3){
-    h+=`<div class="note">Reality depends nonlinearly on both inputs. Rotate the surface and look for the speed “sweet spot” shifting with practice.</div>`;
+    h+=`<div class="note">Reality depends nonlinearly on both inputs. Rotate the surface and look for the arc “sweet spot” shifting as closeness changes.</div>`;
   }else if(state.scene>=4 && state.scene<=7){
     h+=slider("outBias","Output bias",state.outBias,-100,120,.5);
     const k=state.scene===4?1:state.scene===5?2:3;
@@ -433,12 +444,12 @@ function renderSplit(){
   <div class="plotCard"><div class="plotTitle">Top-down pre-activation view</div><div id="top2d" class="smallPlot"></div></div></div>`;
   const r=state.ramps[0];
   Plotly.react("ramp3d",[surfaceTrace(grid((x1,x2)=>relu(r.w1*x1+r.w2*x2+r.b)),"Ramp",.95,"Blues"),boundaryTrace(r)],sceneLayout("",[-10,120]),{responsive:true,displaylogo:false});
-  Plotly.react("top2d",topDownData(r),{margin:{l:55,r:15,t:15,b:50},xaxis:{title:"Driving speed x₁",range:[0,100]},yaxis:{title:"Driving practice x₂",range:[0,100],scaleanchor:"x"},paper_bgcolor:"#fff",plot_bgcolor:"#fff",showlegend:false},{responsive:true,displaylogo:false});
+  Plotly.react("top2d",topDownData(r),{margin:{l:55,r:15,t:15,b:50},xaxis:{title:"Shot arc x₁",range:[0,100]},yaxis:{title:"Closeness x₂",range:[0,100],scaleanchor:"x"},paper_bgcolor:"#fff",plot_bgcolor:"#fff",showlegend:false},{responsive:true,displaylogo:false});
   bindCamera("ramp3d");
 }
 function renderReality(){
   if(!document.getElementById("mainPlot"))document.getElementById("plotArea").innerHTML='<div id="mainPlot"></div>';
-  Plotly.react("mainPlot",[surfaceTrace(grid(reality),"Reality",1,"Viridis")],sceneLayout("Robot-score reality",[0,120]),{responsive:true,displaylogo:false});
+  Plotly.react("mainPlot",[surfaceTrace(grid(reality),"Reality",1,"Viridis")],sceneLayout("Make-probability reality",[0,100]),{responsive:true,displaylogo:false});
   bindCamera("mainPlot");
 }
 function renderFitScene(k){
@@ -484,8 +495,8 @@ function renderNetwork(){
   s+=`<text class="layer" x="850" y="35">Output</text>`;
   s+=`<text class="layer" x="1020" y="35">Error</text>`;
 
-  rect(110,155,155,65,"node","Driving speed","x₁");
-  rect(110,330,155,65,"node","Driving practice","x₂");
+  rect(110,155,155,65,"node","Shot arc","x₁");
+  rect(110,330,155,65,"node","Closeness","x₂");
 
   const ys=[105,245,385];
   ys.forEach((y,i)=>{

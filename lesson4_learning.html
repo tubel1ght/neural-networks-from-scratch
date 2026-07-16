@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Lesson 4 — Separate Learning Rates by Scene</title>
+<title>Lesson 4 — How the Computer Learns</title>
 <style>
 :root{
   --bg:#f6f0e5;--card:#fffdf8;--ink:#1d1d1f;--muted:#666;--line:#d8cfc0;
@@ -13,6 +13,10 @@
 body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
 header{background:#fff;border-bottom:1px solid var(--line);padding:22px 32px}
 h1{margin:0;font-size:34px;letter-spacing:-.4px}.sub{margin:6px 0 0;color:var(--muted);font-size:17px}
+.lessonNav{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.lessonNav a{text-decoration:none;font-size:14px;font-weight:700;color:#3f3f46;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+.lessonNav a:hover{border-color:#c3b9a6}
+.lessonNav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 .wrap{max-width:1450px;margin:0 auto;padding:20px;display:grid;grid-template-columns:420px 1fr;gap:20px;align-items:start}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}
 .side{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto}
@@ -51,6 +55,13 @@ canvas{width:100%;height:590px;touch-action:manipulation;border:1px solid #eadfc
 <header>
 <h1>Lesson 4: How the Computer Learns</h1>
 <p class="sub">From error, to derivatives, to gradient descent, to backpropagation.</p>
+<nav class="lessonNav">
+<a href="index.html">Home</a>
+<a href="lesson1_features.html">1 · Features</a>
+<a href="lesson2_hinges.html">2 · Hinges</a>
+<a href="lesson3_ramps.html">3 · Ramps</a>
+<a href="lesson4_learning.html" class="active">4 · Learning</a>
+</nav>
 </header>
 
 <div class="wrap">
@@ -115,7 +126,11 @@ const scenes=[
 ];
 
 function reality(x){
-  return 75*Math.exp(-((x-58)*(x-58))/900)+8;
+  // A 1-feature slice of the shared make-probability model from Lessons 1-3:
+  // vary the shot arc x, holding closeness = 50 and clearness = 100 fixed.
+  const arc=Math.exp(-((x-65)*(x-65))/3000);
+  const close=Math.log(60/10)/Math.log(11);
+  return 100*arc*close;
 }
 function lineModel(x,b=state.bias,m=state.slope){return b+m*x}
 function mseLine(b=state.bias,m=state.slope){
@@ -389,7 +404,7 @@ function curve(ctx,domain,fn,X,Y,color,width=3,dash=[]){
   ctx.stroke();ctx.restore();
 }
 function drawPredictionScene(){
-  const {ctx,W,H}=ctxSetup(),a=drawAxes(ctx,W,H,0,100,0,120,"x","score");
+  const {ctx,W,H}=ctxSetup(),a=drawAxes(ctx,W,H,0,100,0,120,"shot arc","make %");
   curve(ctx,xs,reality,a.X,a.Y,"#111827",5);
   curve(ctx,xs,x=>lineModel(x),a.X,a.Y,"#1d4ed8",4,[10,6]);
   xs.filter((_,i)=>i%4===0).forEach(x=>{
@@ -542,7 +557,7 @@ function drawContour(){
   ctx.fillText(`RMSE ${rmseLine().toFixed(2)}`,m.l+12,m.t+22);
 }
 function drawHingeScene(){
-  const {ctx,W,H}=ctxSetup(),a=drawAxes(ctx,W,H,0,100,0,120,"x","output");
+  const {ctx,W,H}=ctxSetup(),a=drawAxes(ctx,W,H,0,100,0,120,"shot arc","make %");
   curve(ctx,xs,reality,a.X,a.Y,"#111827",5);
   curve(ctx,xs,x=>hingeForward(x).y,a.X,a.Y,"#1d4ed8",4,[10,6]);
   const x=state.selectedSample,f=hingeForward(x),t=reality(x);

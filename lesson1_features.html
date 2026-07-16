@@ -3,16 +3,20 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Robot scores based on “features”</title>
+<title>Lesson 1 — Shot success from shot features</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
 :root{
-  --bg:#f7f4ec;
-  --card:#ffffff;
-  --ink:#222;
+  --bg:#f6f0e5;
+  --card:#fffdf8;
+  --ink:#1d1d1f;
   --muted:#666;
-  --line:#d7d0c2;
-  --blue:#2563eb;
+  --line:#d8cfc0;
+  --blue:#1d4ed8;
+  --green:#15803d;
+  --orange:#ea580c;
+  --purple:#7c3aed;
+  --red:#dc2626;
 }
 *{box-sizing:border-box}
 body{
@@ -26,8 +30,12 @@ header{
   border-bottom:1px solid var(--line);
   padding:18px 24px;
 }
-h1{margin:0 0 4px;font-size:26px}
-.subtitle{margin:0;color:var(--muted)}
+h1{margin:0 0 4px;font-size:34px}
+.subtitle{margin:0;color:var(--muted);font-size:17px}
+.lessonNav{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.lessonNav a{text-decoration:none;font-size:14px;font-weight:700;color:#3f3f46;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+.lessonNav a:hover{border-color:#c3b9a6}
+.lessonNav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 .wrap{
   max-width:1280px;
   margin:0 auto;
@@ -135,29 +143,37 @@ button:hover{filter:brightness(.95)}
 </head>
 <body>
 <header>
-  <h1>Robot scores based on “features”</h1>
-  <p class="subtitle">Explore how robot scores change as driving speed, driving practice, and shooting reliability vary.</p>
+  <h1>What makes a shot go in?</h1>
+  <p class="subtitle">Explore how the chance of making a shot changes with the shot's arc, its closeness to the goal, and how clear the shot is.</p>
+  <nav class="lessonNav">
+    <a href="index.html">Home</a>
+    <a href="lesson1_features.html" class="active">1 · Features</a>
+    <a href="lesson2_hinges.html">2 · Hinges</a>
+    <a href="lesson3_ramps.html">3 · Ramps</a>
+    <a href="lesson4_learning.html">4 · Learning</a>
+  </nav>
 </header>
 
 <div class="wrap">
   <section class="panel controls">
-    <span class="pill">x1 = driving speed</span>
-    <span class="pill">x2 = driving practice</span>
-    <span class="pill">x3 = shooting reliability</span>
+    <span class="pill">x1 = shot arc</span>
+    <span class="pill">x2 = closeness to goal</span>
+    <span class="pill">x3 = shot clearness</span>
 
     <h2>Reality equation</h2>
-    <textarea id="equation" spellcheck="false">0.5
+    <p class="small">This hidden "truth" turns three shot features into a make-probability (0–100%). You can edit it, but you never need to understand it.</p>
+    <textarea id="equation" spellcheck="false">100
 * exp((x1-50-0.3*x2)^2 / -3000)
-* ln((x2+10)/10)
-* x3</textarea>
+* ln((x2+10)/10) / ln(11)
+* (x3/100)</textarea>
 
     <label>Color points by</label>
     <select id="colorBy">
       <option value="none">None</option>
-      <option value="x1">x1 driving speed</option>
-      <option value="x2">x2 driving practice</option>
-      <option value="x3">x3 shooting reliability</option>
-      <option value="score">score</option>
+      <option value="x1">x1 shot arc</option>
+      <option value="x2">x2 closeness to goal</option>
+      <option value="x3">x3 shot clearness</option>
+      <option value="score">make probability</option>
     </select>
 
     <h3>Visible slice filters</h3>
@@ -297,10 +313,10 @@ function makeData(obj){
 function colorInfo(d){
   const colorBy = document.getElementById("colorBy").value;
   if(colorBy === "none") return {values:null, title:"", phrase:"no coloring"};
-  if(colorBy === "x1") return {values:d.xs, title:"x1 speed", cmin:0, cmax:100};
-  if(colorBy === "x2") return {values:d.x2s, title:"x2 practice", cmin:0, cmax:100};
-  if(colorBy === "x3") return {values:d.x3s, title:"x3 shooting reliability", cmin:0, cmax:100};
-  return {values:d.scores, title:"score", cauto:true};
+  if(colorBy === "x1") return {values:d.xs, title:"x1 arc", cmin:0, cmax:100};
+  if(colorBy === "x2") return {values:d.x2s, title:"x2 closeness", cmin:0, cmax:100};
+  if(colorBy === "x3") return {values:d.x3s, title:"x3 clearness", cmin:0, cmax:100};
+  return {values:d.scores, title:"make %", cauto:true};
 }
 
 function showError(message){
@@ -370,10 +386,10 @@ function updatePlot(){
     z:d.scores,
     marker,
     text:d.xs.map((x1,i)=>
-      `x1 speed: ${x1.toFixed(1)}<br>`+
-      `x2 practice: ${d.x2s[i].toFixed(1)}<br>`+
-      `x3 shooting reliability: ${d.x3s[i].toFixed(1)}<br>`+
-      `score: ${d.scores[i].toFixed(2)}`
+      `x1 shot arc: ${x1.toFixed(1)}<br>`+
+      `x2 closeness: ${d.x2s[i].toFixed(1)}<br>`+
+      `x3 clearness: ${d.x3s[i].toFixed(1)}<br>`+
+      `make chance: ${d.scores[i].toFixed(1)}%`
     ),
     hoverinfo:"text"
   };
@@ -383,9 +399,9 @@ function updatePlot(){
     paper_bgcolor:"#ffffff",
     plot_bgcolor:"#ffffff",
     scene:{
-      xaxis:{title:"x1 driving speed", range:[0,100]},
-      yaxis:{title:"x2 driving practice", range:[0,100]},
-      zaxis:{title:"score"}
+      xaxis:{title:"x1 shot arc", range:[0,100]},
+      yaxis:{title:"x2 closeness to goal", range:[0,100]},
+      zaxis:{title:"make probability (%)"}
     },
     uirevision:"keep-camera"
   };

@@ -8,6 +8,10 @@
 :root{--bg:#f6f0e5;--card:#fffdf8;--ink:#1d1d1f;--muted:#666;--line:#d8cfc0;--blue:#1d4ed8;--green:#15803d;--orange:#ea580c;--purple:#7c3aed;--red:#dc2626}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
 header{background:#fff;border-bottom:1px solid var(--line);padding:22px 32px}h1{margin:0;font-size:34px}.sub{margin:6px 0 0;color:var(--muted);font-size:17px}
+.lessonNav{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.lessonNav a{text-decoration:none;font-size:14px;font-weight:700;color:#3f3f46;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+.lessonNav a:hover{border-color:#c3b9a6}
+.lessonNav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 .wrap{max-width:1420px;margin:0 auto;padding:20px;display:grid;grid-template-columns:420px 1fr;gap:20px;align-items:start}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}.side{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto}
 .sceneNo{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--muted);font-size:14px;background:#fff}
@@ -30,7 +34,14 @@ canvas{width:100%;height:570px;border:1px solid #eadfce;border-radius:16px;backg
 </style>
 </head>
 <body>
-<header><h1>Building Reality from Hinges</h1><p class="sub">From a line, to adjustable hinges, to a textbook neural network.</p></header>
+<header><h1>Building Reality from Hinges</h1><p class="sub">From a line, to adjustable hinges, to a textbook neural network.</p>
+<nav class="lessonNav">
+<a href="index.html">Home</a>
+<a href="lesson1_features.html">1 · Features</a>
+<a href="lesson2_hinges.html" class="active">2 · Hinges</a>
+<a href="lesson3_ramps.html">3 · Ramps</a>
+<a href="lesson4_learning.html">4 · Learning</a>
+</nav></header>
 <div class="wrap">
 <section class="panel side">
 <span class="sceneNo" id="sceneNo"></span><div class="question" id="question"></div><p class="oneSentence" id="sentence"></p>
@@ -59,7 +70,7 @@ const scenes=[
 ["Where is the neural network?","The same four-hinge model is now drawn in the conventional input → hidden → output form."]
 ];
 function relu(z){return Math.max(0,z)}
-function reality(x){return .5*Math.exp(((x-50-.3*state.x2)**2)/-3000)*Math.log((state.x2+10)/10)*state.x3}
+function reality(x){return 100*Math.exp(((x-50-.3*state.x2)**2)/-3000)*(Math.log((state.x2+10)/10)/Math.log(11))*(state.x3/100)}
 function activeK(){return state.scene<=1?0:state.scene===2?2:state.scene===3?3:4}
 function useLine(){return state.scene===0}
 function neuronY(n,x){return n.a*relu(n.w*(x-n.c))}
@@ -96,8 +107,8 @@ function directionControls(){
 function buildControls(){
   let h="";
   if(state.scene<5){
-    h+=slider("x2","Driving practice",state.x2,0,100,1);
-    h+=slider("x3","Shooting reliability",state.x3,0,100,1);
+    h+=slider("x2","Closeness to goal",state.x2,0,100,1);
+    h+=slider("x3","Shot clearness",state.x3,0,100,1);
   }
   h+=slider("outBias","Output bias",state.outBias,-120,120,.5);
 
@@ -154,7 +165,7 @@ function drawGraph(){
   ctx.strokeStyle="#111827";ctx.lineWidth=2;
   ctx.beginPath();ctx.moveTo(m.l,Y(0));ctx.lineTo(W-m.r,Y(0));ctx.stroke();
   ctx.beginPath();ctx.moveTo(m.l,m.t);ctx.lineTo(m.l,H-m.b);ctx.stroke();
-  ctx.fillStyle="#111827";ctx.font="17px Arial";ctx.fillText("score",18,34);ctx.fillText("x1 driving speed",W/2-65,H-14);
+  ctx.fillStyle="#111827";ctx.font="17px Arial";ctx.fillText("make %",18,34);ctx.fillText("x1 shot arc",W/2-55,H-14);
 
   function curve(domain,fn,color,width,dash=[]){
     ctx.save();ctx.beginPath();ctx.rect(m.l,m.t,pw,ph);ctx.clip();
