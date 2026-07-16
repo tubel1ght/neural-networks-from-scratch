@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Neural Networks from Scratch — Interactive Course</title>
+<style>
+:root{
+  --bg:#f6f0e5;--card:#fffdf8;--ink:#1d1d1f;--muted:#666;--line:#d8cfc0;
+  --blue:#1d4ed8;--green:#15803d;--orange:#ea580c;--red:#dc2626;--purple:#7c3aed;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif;line-height:1.5}
+header{background:#fff;border-bottom:1px solid var(--line);padding:40px 24px}
+.headInner{max-width:1000px;margin:0 auto}
+h1{margin:0;font-size:40px;letter-spacing:-.5px}
+.sub{margin:10px 0 0;color:var(--muted);font-size:19px;max-width:720px}
+.wrap{max-width:1000px;margin:0 auto;padding:28px 24px 60px}
+.intro{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px 26px;margin-bottom:28px}
+.intro h2{margin:0 0 8px;font-size:22px}
+.intro p{margin:0 0 14px;font-size:16px;color:#3f3f46}
+.eq{font-family:ui-monospace,Menlo,Consolas,monospace;background:#f3f0ea;border:1px solid #e5ded2;border-radius:12px;padding:14px;font-size:14px;overflow-x:auto;white-space:nowrap}
+.eqNote{font-size:13px;color:var(--muted);margin-top:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}h1{font-size:32px}}
+a.card{display:block;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
+a.card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.09);border-color:#c3b9a6}
+.badge{display:inline-block;font-weight:900;font-size:13px;color:#fff;border-radius:999px;padding:4px 11px;margin-bottom:12px}
+.b1{background:var(--blue)}.b2{background:var(--green)}.b3{background:var(--purple)}.b4{background:var(--orange)}
+.card h3{margin:0 0 8px;font-size:22px}
+.card p{margin:0 0 14px;font-size:15px;color:#3f3f46}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:12px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:999px;padding:3px 9px}
+.go{margin-top:14px;font-weight:800;color:var(--blue)}
+footer{max-width:1000px;margin:0 auto;padding:0 24px 50px;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <div class="headInner">
+    <h1>Neural Networks from Scratch</h1>
+    <p class="sub">An interactive course that builds a neural network one honest step at a time — starting from a robot's score, ending at backpropagation. Move the sliders. Watch the model respond. No math background required.</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="intro">
+    <h2>One story, all the way through</h2>
+    <p>Every lesson models the same imaginary "reality": how well a competition robot <b>scores</b> based on three features — its <b>driving speed</b>, how much <b>driving practice</b> the team has put in, and its <b>shooting reliability</b>. You'll start by exploring that reality, then slowly learn to <em>rebuild it</em> yourself out of simple bendable pieces — which turns out to be exactly what a neural network does.</p>
+    <div class="eq">score = 0.5 · exp((x1 − 50 − 0.3·x2)² / −3000) · ln((x2 + 10) / 10) · x3</div>
+    <p class="eqNote">You never have to understand this formula. It's just the hidden "truth" the model is trying to learn — the same truth in every lesson.</p>
+  </section>
+
+  <div class="grid">
+    <a class="card" href="lesson1_features.html">
+      <span class="badge b1">Lesson 1</span>
+      <h3>Features</h3>
+      <p>Reality is a function of inputs. Explore in 3D how a robot's score changes as its speed, practice, and shooting reliability vary.</p>
+      <div class="tags"><span class="tag">3D exploration</span><span class="tag">intuition</span></div>
+      <div class="go">Start exploring →</div>
+    </a>
+
+    <a class="card" href="lesson2_hinges.html">
+      <span class="badge b2">Lesson 2</span>
+      <h3>Hinges</h3>
+      <p>A straight line can't capture reality. Meet the bendable "hinge," stack a few of them to trace the curve — then watch them become a textbook neural network.</p>
+      <div class="tags"><span class="tag">ReLU</span><span class="tag">one input</span><span class="tag">first network</span></div>
+      <div class="go">Open lesson →</div>
+    </a>
+
+    <a class="card" href="lesson3_ramps.html">
+      <span class="badge b3">Lesson 3</span>
+      <h3>Ramps</h3>
+      <p>Add a second input and each hinge becomes a tilted ramp. Combine ramps to build a whole landscape — a two-input neural network.</p>
+      <div class="tags"><span class="tag">two inputs</span><span class="tag">landscapes</span><span class="tag">hidden layer</span></div>
+      <div class="go">Open lesson →</div>
+    </a>
+
+    <a class="card" href="lesson4_computational_graph_v11_learning_rates.html">
+      <span class="badge b4">Lesson 4</span>
+      <h3>How the Computer Learns</h3>
+      <p>Too many knobs to tune by hand. See how error, derivatives, gradient descent, and backpropagation let the computer tune itself.</p>
+      <div class="tags"><span class="tag">gradient descent</span><span class="tag">backprop</span><span class="tag">training</span></div>
+      <div class="go">Open lesson →</div>
+    </a>
+  </div>
+</div>
+
+<footer>
+  A hands-on course for robotics-club students. Best viewed on a laptop or desktop.
+</footer>
+</body>
+</html>
