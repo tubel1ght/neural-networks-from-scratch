@@ -26,7 +26,7 @@ h1{margin:0;font-size:40px;letter-spacing:-.5px}
 a.card{display:block;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
 a.card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.09);border-color:#c3b9a6}
 .badge{display:inline-block;font-weight:900;font-size:13px;color:#fff;border-radius:999px;padding:4px 11px;margin-bottom:12px}
-.b1{background:var(--blue)}.b2{background:var(--green)}.b3{background:var(--purple)}.b4{background:var(--orange)}
+.b1{background:var(--blue)}.b2{background:var(--green)}.b3{background:var(--purple)}.b4{background:var(--orange)}.b5{background:#0891b2}.b6{background:#be185d}
 .card h3{margin:0 0 8px;font-size:22px}
 .card p{margin:0 0 14px;font-size:15px;color:#3f3f46}
 .tags{display:flex;flex-wrap:wrap;gap:6px}
@@ -39,7 +39,7 @@ footer{max-width:1000px;margin:0 auto;padding:0 24px 50px;color:var(--muted);fon
 <header>
   <div class="headInner">
     <h1>Neural Networks from Scratch</h1>
-    <p class="sub">An interactive course that builds a neural network one honest step at a time — starting from a single robot shot, ending at backpropagation. Move the sliders. Watch the model respond. No math background required.</p>
+    <p class="sub">An interactive course that builds a neural network one honest step at a time — from a single robot shot all the way to Transformers. Move the sliders. Watch the model respond. No math background required.</p>
   </div>
 </header>
 
@@ -81,6 +81,22 @@ footer{max-width:1000px;margin:0 auto;padding:0 24px 50px;color:var(--muted);fon
       <h3>How the Computer Learns</h3>
       <p>Too many knobs to tune by hand. See how error, derivatives, gradient descent, and backpropagation let the computer tune itself.</p>
       <div class="tags"><span class="tag">gradient descent</span><span class="tag">backprop</span><span class="tag">training</span></div>
+      <div class="go">Open lesson →</div>
+    </a>
+
+    <a class="card" href="lesson5_learned_features.html">
+      <span class="badge b5">Lesson 5</span>
+      <h3>Learned Features</h3>
+      <p>Measuring features by hand is expensive. Feed the network a raw photo of the shot and watch it invent its own features — and actually train it live.</p>
+      <div class="tags"><span class="tag">raw pixels</span><span class="tag">representation learning</span><span class="tag">live training</span></div>
+      <div class="go">Open lesson →</div>
+    </a>
+
+    <a class="card" href="lesson6_transformer.html">
+      <span class="badge b6">Lesson 6</span>
+      <h3>Transformers</h3>
+      <p>Connect it all to a Transformer: the feed-forward layers are the machine you built, and attention is the new idea — letting the pieces of the input talk to each other.</p>
+      <div class="tags"><span class="tag">attention</span><span class="tag">embeddings</span><span class="tag">FFN</span></div>
       <div class="go">Open lesson →</div>
     </a>
   </div>

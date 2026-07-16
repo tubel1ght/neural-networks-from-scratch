@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Lesson 6 — From Your Network to a Transformer</title>
+<style>
+:root{
+  --bg:#f6f0e5;--card:#fffdf8;--ink:#1d1d1f;--muted:#666;--line:#d8cfc0;
+  --blue:#1d4ed8;--green:#15803d;--orange:#ea580c;--red:#dc2626;--purple:#7c3aed;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
+header{background:#fff;border-bottom:1px solid var(--line);padding:22px 32px}
+h1{margin:0;font-size:34px;letter-spacing:-.4px}.sub{margin:6px 0 0;color:var(--muted);font-size:17px}
+.lessonNav{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.lessonNav a{text-decoration:none;font-size:14px;font-weight:700;color:#3f3f46;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+.lessonNav a:hover{border-color:#c3b9a6}
+.lessonNav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.wrap{max-width:1450px;margin:0 auto;padding:20px;display:grid;grid-template-columns:420px 1fr;gap:20px;align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}
+.side{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto}
+.sceneNo{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--muted);font-size:14px;background:#fff}
+.question{font-size:30px;line-height:1.12;margin:16px 0 8px;font-weight:800}
+.sentence{font-size:18px;color:#3f3f46;line-height:1.45;margin:0 0 16px}
+label{display:block;font-weight:800;margin:14px 0 6px;font-size:16px}
+input[type=range]{width:100%;accent-color:var(--blue)}
+button{border:1px solid var(--blue);background:var(--blue);color:white;border-radius:12px;padding:12px 15px;font-weight:800;cursor:pointer;margin-top:10px;font-size:16px}
+button.secondary{background:#f5f5f5;color:#222;border-color:#999}
+button:disabled{opacity:.5;cursor:not-allowed}
+.nav{display:flex;gap:10px;margin-top:18px}.nav button{width:50%}
+.value{float:right;font-weight:900}
+.note{background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;margin-top:12px;font-size:14px;line-height:1.45}
+.blueNote{background:#e0f2fe;border-color:#7dd3fc}
+.mapNote{background:#f5f3ff;border:1px solid #c4b5fd;border-radius:12px;padding:12px;margin-top:12px;font-size:14px;line-height:1.45}
+canvas{width:100%;height:600px;border:1px solid #eadfce;border-radius:16px;background:#fff}
+@media(max-width:1000px){.wrap{grid-template-columns:1fr}.side{position:static;max-height:none}}
+</style>
+</head>
+<body>
+<header>
+<h1>Lesson 6: From Your Network to a Transformer</h1>
+<p class="sub">The feed-forward part is the machine you already built. Attention is the new idea: let the pieces of the input talk to each other.</p>
+<nav class="lessonNav">
+<a href="index.html">Home</a>
+<a href="lesson1_features.html">1 · Features</a>
+<a href="lesson2_hinges.html">2 · Hinges</a>
+<a href="lesson3_ramps.html">3 · Ramps</a>
+<a href="lesson4_learning.html">4 · Learning</a>
+<a href="lesson5_learned_features.html">5 · Learned features</a>
+<a href="lesson6_transformer.html" class="active">6 · Transformers</a>
+</nav>
+</header>
+
+<div class="wrap">
+<section class="panel side">
+  <span class="sceneNo" id="sceneNo"></span>
+  <div class="question" id="question"></div>
+  <p class="sentence" id="sentence"></p>
+  <div id="controls"></div>
+  <div class="nav">
+    <button class="secondary" id="prev">← Back</button>
+    <button id="next">Next →</button>
+  </div>
+</section>
+
+<main class="panel">
+  <canvas id="stage" width="1000" height="600"></canvas>
+  <div id="extra"></div>
+</main>
+</div>
+
+<script>
+function reality(a,c,q){const arc=Math.exp(-((a-50-0.3*c)**2)/3000);const close=Math.log((c+10)/10)/Math.log(11);const clear=q/100;return 100*arc*close*clear;}
+
+// A 9x9 shot photo split into a 3x3 grid of patches (9 patches).
+const G=9, P=3, NP=P*P;
+function renderShot(a,c,q,out){
+  const row=(1-a/100)*(G-1), col=(c/100)*(G-1), bright=0.35+0.65*(q/100);
+  for(let r=0;r<G;r++)for(let cc=0;cc<G;cc++){const d2=(r-row)**2+(cc-col)**2;out[r*G+cc]=bright*Math.exp(-d2/1.8);}
+}
+// Each patch -> a small 3-number embedding: [brightness (weighted), row position, col position].
+function patchEmbeddings(img){
+  const E=[];
+  for(let pr=0;pr<P;pr++)for(let pc=0;pc<P;pc++){
+    let sum=0;for(let r=0;r<3;r++)for(let cc=0;cc<3;cc++)sum+=img[(pr*3+r)*G+(pc*3+cc)];
+    const avg=sum/9;
+    E.push([3*avg,(pr-1),(pc-1)]); // brightness scaled so it dominates similarity
+  }
+  return E;
+}
+function dot(a,b){let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s;}
+function attention(E,qi){
+  const d=E[0].length, scale=Math.sqrt(d);
+  const scores=E.map(k=>dot(E[qi],k)/scale);
+  const mx=Math.max(...scores);
+  const ex=scores.map(s=>Math.exp(s-mx));
+  const Z=ex.reduce((a,b)=>a+b,0);
+  const w=ex.map(e=>e/Z);
+  const mixed=[0,0,0];
+  E.forEach((e,i)=>{for(let k=0;k<3;k++)mixed[k]+=w[i]*e[k];});
+  return {w,mixed};
+}
+
+const state={scene:0,arc:70,close:60,clear:80,query:4};
+const img=new Float64Array(G*G);
+
+const scenes=[
+["Big inputs have many pieces","A photo has hundreds of pixels; a sentence has many words. In Lesson 5 each hidden unit stared at the whole image at once. Transformers instead cut the input into pieces and let those pieces share information."],
+["Step 1: pieces become embeddings","Chop the photo into patches (or a sentence into words). Turn each piece into a short list of numbers — an embedding — that describes what is there and where it is."],
+["Step 2: attention lets pieces talk","Pick one patch. Attention lets it look at every other patch and pull in a weighted blend of the related ones. The ball patch gathers information from other ball patches."],
+["Step 3: the feed-forward network is your machine","After attention mixes information across patches, every patch is passed through a feed-forward network: Linear → ReLU → Linear. That is exactly the hinge/ramp machine from Lessons 2–5."],
+["A Transformer block = attention + FFN","Stack the two steps into a block — attention to share information, then a feed-forward network to process each piece — and repeat the block many times. That is a Transformer."],
+["The whole picture","Pixels or words → embeddings → many (attention + feed-forward) blocks → a prediction. Every feed-forward box is the same little network you built by hand; attention is the one new idea."]
+];
+
+function stage(){const c=document.getElementById("stage"),ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);return {ctx,W:c.width,HH:c.height};}
+function pixColor(p){const t=Math.min(1,Math.max(0,p));const r=Math.round(40+(255-40)*t),g=Math.round(90+(232-90)*t),b=Math.round(52+(70-52)*t);return `rgb(${r},${g},${b})`;}
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function drawPhoto(ctx,x,y,size,patchLines=true){
+  const cell=size/G;
+  for(let r=0;r<G;r++)for(let cc=0;cc<G;cc++){ctx.fillStyle=pixColor(img[r*G+cc]);ctx.fillRect(x+cc*cell,y+r*cell,cell+.5,cell+.5);}
+  ctx.strokeStyle="#8a7f6a";ctx.lineWidth=2;ctx.strokeRect(x,y,size,size);
+  if(patchLines){ctx.strokeStyle="#111";ctx.lineWidth=2.5;for(let i=1;i<P;i++){const t=i*size/P;ctx.beginPath();ctx.moveTo(x+t,y);ctx.lineTo(x+t,y+size);ctx.stroke();ctx.beginPath();ctx.moveTo(x,y+t);ctx.lineTo(x+size,y+t);ctx.stroke();}}
+}
+function vecBars(ctx,vec,x,y,w,h,labels){
+  const n=vec.length, bw=w/n, mx=Math.max(1,...vec.map(v=>Math.abs(v)));
+  for(let i=0;i<n;i++){const bh=Math.abs(vec[i])/mx*(h/2);ctx.fillStyle=vec[i]>=0?"#1d4ed8":"#dc2626";ctx.fillRect(x+i*bw+4,y+h/2-(vec[i]>=0?bh:0),bw-8,bh);ctx.fillStyle="#555";ctx.font="11px Arial";if(labels)ctx.fillText(labels[i],x+i*bw+6,y+h+14);}
+  ctx.strokeStyle="#bbb";ctx.beginPath();ctx.moveTo(x,y+h/2);ctx.lineTo(x+w,y+h/2);ctx.stroke();
+}
+
+function scMotivate(){
+  const {ctx}=stage();
+  ctx.fillStyle="#111";ctx.font="bold 21px Arial";ctx.fillText("A pixel alone doesn't know the whole story",60,46);
+  drawPhoto(ctx,80,90,270,false);
+  ctx.fillStyle="#333";ctx.font="15px Arial";
+  ["Lesson 5: each hidden unit looked at every pixel","independently — pixels never compared notes.","","Transformers add a step where each piece of the","input can look at the other pieces first, then decide.","","This 'looking around' is called attention."].forEach((t,i)=>ctx.fillText(t,400,140+i*34));
+}
+function scEmbeddings(){
+  const {ctx}=stage();
+  const E=patchEmbeddings(img);
+  ctx.fillStyle="#111";ctx.font="bold 20px Arial";ctx.fillText("Each patch → an embedding (3 numbers)",60,44);
+  drawPhoto(ctx,70,80,300);
+  // number the patches
+  const cell=300/P;ctx.font="bold 14px Arial";
+  for(let i=0;i<NP;i++){const pr=Math.floor(i/P),pc=i%P;ctx.fillStyle="rgba(0,0,0,.55)";ctx.fillRect(70+pc*cell+4,80+pr*cell+4,20,18);ctx.fillStyle="#fff";ctx.fillText(i+1,70+pc*cell+8,80+pr*cell+18);}
+  // embedding bars on the right
+  ctx.fillStyle="#111";ctx.font="bold 15px Arial";ctx.fillText("embedding of each patch  [brightness, row, col]",430,80);
+  for(let i=0;i<NP;i++){const col=i%3,rw=Math.floor(i/3);const x=430+col*185,y=110+rw*150;ctx.fillStyle="#111";ctx.font="bold 13px Arial";ctx.fillText("patch "+(i+1),x,y-4);vecBars(ctx,E[i],x,y,150,70,["br","row","col"]);}
+}
+function scAttention(){
+  const {ctx}=stage();
+  const E=patchEmbeddings(img);
+  const {w,mixed}=attention(E,state.query);
+  ctx.fillStyle="#111";ctx.font="bold 20px Arial";ctx.fillText("Attention from patch "+(state.query+1)+" to every patch",60,44);
+  // photo with weight overlay
+  const size=300,x0=70,y0=80,cell=size/P;
+  drawPhoto(ctx,x0,y0,size);
+  for(let i=0;i<NP;i++){const pr=Math.floor(i/P),pc=i%P;ctx.fillStyle=`rgba(29,78,216,${(0.75*w[i]).toFixed(3)})`;ctx.fillRect(x0+pc*cell,y0+pr*cell,cell,cell);
+    if(i===state.query){ctx.strokeStyle="#dc2626";ctx.lineWidth=4;ctx.strokeRect(x0+pc*cell+2,y0+pr*cell+2,cell-4,cell-4);}
+    ctx.fillStyle="#fff";ctx.font="bold 13px Arial";ctx.fillText((100*w[i]).toFixed(0)+"%",x0+pc*cell+cell/2-14,y0+pr*cell+cell/2+4);}
+  ctx.fillStyle="#dc2626";ctx.font="bold 14px Arial";ctx.fillText("red = the query patch",x0,y0+size+26);
+  ctx.fillStyle="#1d4ed8";ctx.fillText("blue shading = how much it attends there",x0,y0+size+48);
+  // weight bars
+  ctx.fillStyle="#111";ctx.font="bold 15px Arial";ctx.fillText("attention weights (sum to 100%)",430,90);
+  vecBars(ctx,w,430,110,470,90,Array.from({length:NP},(_,i)=>"p"+(i+1)));
+  // mixed output
+  ctx.fillStyle="#111";ctx.font="bold 15px Arial";ctx.fillText("blended embedding this patch now carries",430,280);
+  vecBars(ctx,mixed,430,300,300,80,["brightness","row","col"]);
+  ctx.fillStyle="#555";ctx.font="14px Arial";
+  ctx.fillText("The query patch pulls a weighted blend from the patches it",430,430);
+  ctx.fillText("attends to — usually the ones that look similar to it.",430,452);
+}
+function scFFN(){
+  const {ctx}=stage();
+  ctx.fillStyle="#111";ctx.font="bold 21px Arial";ctx.fillText("The feed-forward network = your hinge/ramp machine",60,44);
+  const boxes=[["one patch's","embedding","#8a7f6a"],["Linear","(weights + bias)","#1d4ed8"],["ReLU","the bend / hinge","#7c3aed"],["Linear","(weights + bias)","#1d4ed8"],["updated","embedding","#15803d"]];
+  boxes.forEach((b,i)=>{const x=60+i*185;ctx.fillStyle="#fff";ctx.strokeStyle=b[2];ctx.lineWidth=3;roundRect(ctx,x,170,150,96,14);ctx.fill();ctx.stroke();ctx.fillStyle="#111";ctx.font="bold 17px Arial";ctx.fillText(b[0],x+16,206);ctx.fillStyle="#555";ctx.font="13px Arial";ctx.fillText(b[1],x+16,230);if(i<4){ctx.strokeStyle="#111";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+150,218);ctx.lineTo(x+185,218);ctx.stroke();}});
+  ctx.fillStyle="#4c1d95";ctx.font="bold 16px Arial";ctx.fillText("Linear → ReLU → Linear is precisely the network from Lessons 2–5,",60,330);
+  ctx.fillText("now run separately on each patch's embedding.",60,356);
+  ctx.fillStyle="#333";ctx.font="15px Arial";ctx.fillText("Attention decides what information each patch should hold; the",60,410);
+  ctx.fillText("feed-forward network then transforms that information — same",60,434);
+  ctx.fillText("hinges, ramps, weights, biases, and gradient descent as before.",60,458);
+}
+function scBlock(){
+  const {ctx,W}=stage();
+  ctx.fillStyle="#111";ctx.font="bold 21px Arial";ctx.fillText("One Transformer block, stacked N times",60,44);
+  function box(x,y,w,h,fill,stroke,l1,l2){ctx.fillStyle=fill;ctx.strokeStyle=stroke;ctx.lineWidth=3;roundRect(ctx,x,y,w,h,14);ctx.fill();ctx.stroke();ctx.fillStyle="#111";ctx.font="bold 17px Arial";ctx.fillText(l1,x+18,y+34);ctx.fillStyle="#555";ctx.font="13px Arial";if(l2)ctx.fillText(l2,x+18,y+56);}
+  const cx=360;
+  box(cx,90,300,70,"#e0f2fe","#0369a1","Attention","every patch shares info with others");
+  box(cx,200,300,70,"#f5f3ff","#7c3aed","Feed-forward network","Linear → ReLU → Linear, per patch");
+  ctx.strokeStyle="#111";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx+150,160);ctx.lineTo(cx+150,200);ctx.stroke();
+  // repeat bracket
+  ctx.strokeStyle="#111";ctx.lineWidth=3;ctx.strokeRect(cx-24,74,348,214);
+  ctx.fillStyle="#111";ctx.font="bold 16px Arial";ctx.fillText("× N blocks",cx+120,312);
+  ctx.strokeStyle="#999";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx+150,312);ctx.lineTo(cx+150,74);ctx.stroke();
+  // side mapping
+  ctx.fillStyle="#0369a1";ctx.font="bold 15px Arial";ctx.fillText("← the ONE new idea",cx+340,120);
+  ctx.fillStyle="#7c3aed";ctx.fillText("← your Lessons 2–5 network",cx+340,232);
+  ctx.fillStyle="#333";ctx.font="15px Arial";ctx.fillText("Real models (GPT, vision transformers) just stack many of these blocks",60,420);
+  ctx.fillText("over many patches or words, with millions or billions of the same",60,444);
+  ctx.fillText("weights and biases — all tuned by the gradient descent from Lesson 4.",60,468);
+}
+function scWhole(){
+  const {ctx}=stage();
+  ctx.fillStyle="#111";ctx.font="bold 21px Arial";ctx.fillText("The whole pipeline",60,44);
+  const steps=[["Pixels / words","the raw input","#8a7f6a"],["Embeddings","a vector per piece","#1d4ed8"],["Attention + FFN\n× N blocks","mix, then process","#7c3aed"],["Prediction","e.g. make %","#15803d"]];
+  steps.forEach((s,i)=>{const x=60+i*230;ctx.fillStyle="#fff";ctx.strokeStyle=s[2];ctx.lineWidth=3;roundRect(ctx,x,150,180,110,16);ctx.fill();ctx.stroke();ctx.fillStyle="#111";ctx.font="bold 17px Arial";s[0].split("\n").forEach((t,j)=>ctx.fillText(t,x+16,186+j*22));ctx.fillStyle="#555";ctx.font="13px Arial";ctx.fillText(s[1],x+16,244);if(i<3){ctx.strokeStyle="#111";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+180,205);ctx.lineTo(x+230,205);ctx.stroke();}});
+  ctx.fillStyle="#333";ctx.font="16px Arial";
+  ["You started with a line that failed, added hinges, then ramps, learned how","the computer trains itself, let a network invent its own features from pixels,","and finally saw that a Transformer is those same feed-forward networks plus","attention — the trick of letting the pieces of the input talk to each other."].forEach((t,i)=>ctx.fillText(t,60,330+i*30));
+}
+
+function sliderRow(id,label,val,min,max,step){return `<label>${label}<span class="value" id="rv_${id}">${val}</span></label><input id="sl_${id}" type="range" min="${min}" max="${max}" step="${step}" value="${val}">`;}
+function buildControls(){
+  let h="";
+  if(state.scene===1||state.scene===2){
+    h+=`<label>This shot</label>
+    ${sliderRow("arc","Shot arc",state.arc,0,100,1)}
+    ${sliderRow("close","Closeness to goal",state.close,0,100,1)}
+    ${sliderRow("clear","Shot clearness",state.clear,0,100,1)}`;
+    if(state.scene===2){h+=sliderRow("query","Query patch (1–9)",state.query+1,1,9,1);
+      h+=`<div class="note blueNote">Move the query patch. It attends most to patches whose embeddings are similar — usually the other bright, ball-containing patches.</div>`;}
+    else h+=`<div class="note">Each patch's embedding is just a few numbers summarizing that corner of the photo.</div>`;
+  }else if(state.scene===0){
+    h+=`<div class="note">Attention is what lets a model consider a pixel in the context of the pixels around it, or a word in the context of the sentence.</div>`;
+  }else if(state.scene===3){
+    h+=`<div class="mapNote"><b>Mapping back:</b> Linear = the weights and biases. ReLU = the hinge/bend. Two Linears with a ReLU between them is a one-hidden-layer network — Lessons 2 and 3, exactly.</div>`;
+  }else if(state.scene===4){
+    h+=`<div class="mapNote"><b>Attention</b> is the only genuinely new piece. <b>The feed-forward network</b> is the machine you already understand. A block is just those two, and a Transformer is many blocks.</div>`;
+  }else{
+    h+=`<div class="note">Same weights, same biases, same gradient descent — just arranged to handle inputs with many pieces.</div>`;
+  }
+  document.getElementById("controls").innerHTML=h;
+  ["arc","close","clear"].forEach(id=>{const el=document.getElementById("sl_"+id);if(el)el.addEventListener("input",()=>{state[id]=+el.value;document.getElementById("rv_"+id).textContent=el.value;refreshImg();render();});});
+  const q=document.getElementById("sl_query");if(q)q.addEventListener("input",()=>{state.query=(+q.value)-1;document.getElementById("rv_query").textContent=q.value;render();});
+}
+function refreshImg(){renderShot(state.arc,state.close,state.clear,img);}
+function render(){
+  document.getElementById("extra").innerHTML="";
+  if(state.scene===0)scMotivate();
+  else if(state.scene===1)scEmbeddings();
+  else if(state.scene===2)scAttention();
+  else if(state.scene===3)scFFN();
+  else if(state.scene===4)scBlock();
+  else scWhole();
+}
+function updateHeader(){
+  document.getElementById("sceneNo").textContent=`Scene ${state.scene+1} of ${scenes.length}`;
+  document.getElementById("question").textContent=scenes[state.scene][0];
+  document.getElementById("sentence").textContent=scenes[state.scene][1];
+  document.getElementById("prev").disabled=state.scene===0;
+  document.getElementById("next").textContent=state.scene===scenes.length-1?"Done":"Next →";
+}
+function buildScene(){updateHeader();buildControls();render();}
+document.getElementById("prev").onclick=()=>{if(state.scene>0){state.scene--;buildScene()}};
+document.getElementById("next").onclick=()=>{if(state.scene<scenes.length-1){state.scene++;buildScene()}};
+refreshImg();buildScene();
+</script>
+</body>
+</html>

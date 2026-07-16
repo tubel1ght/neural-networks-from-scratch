@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Lesson 5 — Let the Network Find Its Own Features</title>
+<style>
+:root{
+  --bg:#f6f0e5;--card:#fffdf8;--ink:#1d1d1f;--muted:#666;--line:#d8cfc0;
+  --blue:#1d4ed8;--green:#15803d;--orange:#ea580c;--red:#dc2626;--purple:#7c3aed;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
+header{background:#fff;border-bottom:1px solid var(--line);padding:22px 32px}
+h1{margin:0;font-size:34px;letter-spacing:-.4px}.sub{margin:6px 0 0;color:var(--muted);font-size:17px}
+.lessonNav{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.lessonNav a{text-decoration:none;font-size:14px;font-weight:700;color:#3f3f46;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+.lessonNav a:hover{border-color:#c3b9a6}
+.lessonNav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.wrap{max-width:1450px;margin:0 auto;padding:20px;display:grid;grid-template-columns:420px 1fr;gap:20px;align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}
+.side{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto}
+.sceneNo{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--muted);font-size:14px;background:#fff}
+.question{font-size:30px;line-height:1.12;margin:16px 0 8px;font-weight:800}
+.sentence{font-size:18px;color:#3f3f46;line-height:1.45;margin:0 0 16px}
+label{display:block;font-weight:800;margin:14px 0 6px;font-size:16px}
+input[type=range]{width:100%;accent-color:var(--blue)}
+button{border:1px solid var(--blue);background:var(--blue);color:white;border-radius:12px;padding:12px 15px;font-weight:800;cursor:pointer;margin-top:10px;font-size:16px}
+button.secondary{background:#f5f5f5;color:#222;border-color:#999}
+button.green{background:var(--green);border-color:#166534}
+button.orange{background:var(--orange);border-color:#c2410c}
+button:disabled{opacity:.5;cursor:not-allowed}
+.nav{display:flex;gap:10px;margin-top:18px}.nav button{width:50%}
+.value{float:right;font-weight:900}
+.metric{font-size:30px;font-weight:900;margin:12px 0}
+.note{background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;margin-top:12px;font-size:14px;line-height:1.45}
+.blueNote{background:#e0f2fe;border-color:#7dd3fc}
+.controlBox{background:#f5f3ff;border:1px solid #c4b5fd;border-radius:14px;padding:14px;margin:12px 0}
+.controlTitle{font-weight:900;color:#4c1d95;font-size:17px}
+canvas{width:100%;height:600px;border:1px solid #eadfce;border-radius:16px;background:#fff}
+@media(max-width:1000px){.wrap{grid-template-columns:1fr}.side{position:static;max-height:none}}
+</style>
+</head>
+<body>
+<header>
+<h1>Lesson 5: Let the Network Find Its Own Features</h1>
+<p class="sub">Stop hand-measuring features. Hand the network a photo of the shot and let it invent its own.</p>
+<nav class="lessonNav">
+<a href="index.html">Home</a>
+<a href="lesson1_features.html">1 · Features</a>
+<a href="lesson2_hinges.html">2 · Hinges</a>
+<a href="lesson3_ramps.html">3 · Ramps</a>
+<a href="lesson4_learning.html">4 · Learning</a>
+<a href="lesson5_learned_features.html" class="active">5 · Learned features</a>
+<a href="lesson6_transformer.html">6 · Transformers</a>
+</nav>
+</header>
+
+<div class="wrap">
+<section class="panel side">
+  <span class="sceneNo" id="sceneNo"></span>
+  <div class="question" id="question"></div>
+  <p class="sentence" id="sentence"></p>
+  <div id="controls"></div>
+  <div class="nav">
+    <button class="secondary" id="prev">← Back</button>
+    <button id="next">Next →</button>
+  </div>
+</section>
+
+<main class="panel">
+  <canvas id="stage" width="1000" height="600"></canvas>
+  <div id="extra"></div>
+</main>
+</div>
+
+<script>
+// ---------- shared "reality" (same make-probability as Lessons 1-4) ----------
+function reality(a,c,q){
+  const arc=Math.exp(-((a-50-0.3*c)**2)/3000);
+  const close=Math.log((c+10)/10)/Math.log(11);
+  const clear=q/100;
+  return 100*arc*close*clear;
+}
+
+// ---------- the "photo": a tiny GxG image of the shot ----------
+const G=10, D=G*G, H=6;
+// arc  -> vertical position of the ball (higher arc = higher up)
+// close-> horizontal position (closer = nearer the goal on the right)
+// clear-> brightness/contrast of the ball
+function renderShot(a,c,q,out){
+  const row=(1-a/100)*(G-1), col=(c/100)*(G-1), bright=0.35+0.65*(q/100);
+  for(let r=0;r<G;r++)for(let cc=0;cc<G;cc++){
+    const d2=(r-row)**2+(cc-col)**2;
+    out[r*G+cc]=bright*Math.exp(-d2/2.2);
+  }
+}
+
+// ---------- fixed synthetic training set ----------
+const N=120;
+let seed=42; function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
+const X=new Float64Array(N*D), Y=new Float64Array(N), tmp=new Float64Array(D);
+(function buildData(){
+  for(let i=0;i<N;i++){const a=rnd()*100,c=rnd()*100,q=rnd()*100;renderShot(a,c,q,tmp);X.set(tmp,i*D);Y[i]=reality(a,c,q)/100;}
+})();
+
+// ---------- the network: 100 pixels -> H ReLU -> 1 ----------
+const net={W1:new Float64Array(H*D),b1:new Float64Array(H),W2:new Float64Array(H),b2:0};
+const gW1=new Float64Array(H*D),gb1=new Float64Array(H),gW2=new Float64Array(H);
+const z=new Float64Array(H),act=new Float64Array(H);
+function initNet(){
+  let s=7; const r=()=>{s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff;};
+  for(let j=0;j<H*D;j++)net.W1[j]=(r()-0.5)*0.2;
+  for(let h=0;h<H;h++){net.b1[h]=0;net.W2[h]=(r()-0.5)*0.2;}
+  net.b2=0;
+}
+function forward(xoff){
+  let y=net.b2;
+  for(let h=0;h<H;h++){let acc=net.b1[h];const wo=h*D;for(let i=0;i<D;i++)acc+=net.W1[wo+i]*X[xoff+i];z[h]=acc;act[h]=acc>0?acc:0;y+=net.W2[h]*act[h];}
+  return y;
+}
+function forwardImg(img){
+  let y=net.b2;
+  for(let h=0;h<H;h++){let acc=net.b1[h];const wo=h*D;for(let i=0;i<D;i++)acc+=net.W1[wo+i]*img[i];y+=net.W2[h]*(acc>0?acc:0);}
+  return y;
+}
+function rmsePct(){let ss=0;for(let i=0;i<N;i++){const e=forward(i*D)-Y[i];ss+=e*e;}return Math.sqrt(ss/N)*100;}
+const LR=0.5;
+function trainSteps(k){
+  for(let step=0;step<k;step++){
+    gW1.fill(0);gb1.fill(0);gW2.fill(0);let gb2=0;
+    for(let i=0;i<N;i++){const xo=i*D,y=forward(xo),dY=2*(y-Y[i])/N;gb2+=dY;
+      for(let h=0;h<H;h++){gW2[h]+=dY*act[h];const dz=z[h]>0?dY*net.W2[h]:0;gb1[h]+=dz;const wo=h*D;for(let m=0;m<D;m++)gW1[wo+m]+=dz*X[xo+m];}}
+    net.b2-=LR*gb2;for(let h=0;h<H;h++){net.W2[h]-=LR*gW2[h];net.b1[h]-=LR*gb1[h];const wo=h*D;for(let m=0;m<D;m++)net.W1[wo+m]-=LR*gW1[wo+m];}
+    state.steps++;
+  }
+}
+function ensureTrained(){ if(state.steps<250) trainSteps(250-state.steps); }
+
+// ---------- state ----------
+const state={scene:0,arc:70,close:60,clear:80,steps:0,history:[],training:false,token:0};
+initNet();
+
+const scenes=[
+["The features were expensive","Until now a human had to measure the arc, closeness, and clearness of every single shot to train the model. For thousands of shots, that is a lot of tedious work."],
+["The lazy idea: just use the photo","What if we skip the measuring and simply snap a photo of the shot? The picture already contains the arc, the closeness, and how clear the shot is — we just have to let the computer read it."],
+["Pixels become the inputs","Flatten the photo into its raw pixels. Instead of 3 hand-made features, the network now takes 100 pixel numbers and the same hidden layer of ReLU units you already built."],
+["Let it learn from pixels","Run gradient descent (Lesson 4) on the pixels. With no idea what \u201carc\u201d or \u201cclearness\u201d mean, the network tunes itself until its make-probability matches reality."],
+["What did it invent?","Look inside: each hidden unit has learned to respond to a pattern of pixels — its own feature detector. We never named these features; the network discovered them."],
+["This is representation learning","We handed over raw pixels and the network built its own features. That is why modern models can take images, sound, or text directly — no human feature engineering required."]
+];
+
+// ---------- canvas helpers ----------
+function stage(){const c=document.getElementById("stage"),ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);return {c,ctx,W:c.width,H:c.height};}
+function pixColor(p){const t=Math.min(1,Math.max(0,p));const r=Math.round(40+(255-40)*t),g=Math.round(90+(232-90)*t),b=Math.round(52+(70-52)*t);return `rgb(${r},${g},${b})`;}
+function heatColor(v){const m=Math.min(1,Math.abs(v)),f=Math.round(255*(1-m));return v>=0?`rgb(255,${f},${f})`:`rgb(${f},${f},255)`;}
+function drawImage(ctx,img,x,y,size,grid=true){
+  const cell=size/G;
+  for(let r=0;r<G;r++)for(let cc=0;cc<G;cc++){ctx.fillStyle=pixColor(img[r*G+cc]);ctx.fillRect(x+cc*cell,y+r*cell,cell+.5,cell+.5);}
+  if(grid){ctx.strokeStyle="rgba(255,255,255,.18)";ctx.lineWidth=1;for(let i=0;i<=G;i++){ctx.beginPath();ctx.moveTo(x+i*cell,y);ctx.lineTo(x+i*cell,y+size);ctx.stroke();ctx.beginPath();ctx.moveTo(x,y+i*cell);ctx.lineTo(x+size,y+i*cell);ctx.stroke();}}
+  ctx.strokeStyle="#8a7f6a";ctx.lineWidth=2;ctx.strokeRect(x,y,size,size);
+}
+function drawHeat(ctx,wo,x,y,size){
+  let mx=1e-6;for(let i=0;i<D;i++)mx=Math.max(mx,Math.abs(net.W1[wo+i]));
+  const cell=size/G;
+  for(let r=0;r<G;r++)for(let cc=0;cc<G;cc++){ctx.fillStyle=heatColor(net.W1[wo+r*G+cc]/mx);ctx.fillRect(x+cc*cell,y+r*cell,cell+.5,cell+.5);}
+  ctx.strokeStyle="#8a7f6a";ctx.lineWidth=2;ctx.strokeRect(x,y,size,size);
+}
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+// ---------- scene renderers ----------
+function drawFeatureOverhead(){
+  const {ctx,W}=stage();
+  ctx.fillStyle="#111";ctx.font="bold 20px Arial";ctx.fillText("The old way: a human measures 3 features for every shot",60,46);
+  const feats=[["Shot arc","measured by hand","#1d4ed8"],["Closeness to goal","measured by hand","#15803d"],["Shot clearness","measured by hand","#ea580c"]];
+  feats.forEach((f,i)=>{const y=120+i*130;ctx.fillStyle="#fff";ctx.strokeStyle=f[2];ctx.lineWidth=3;roundRect(ctx,70,y,260,90,16);ctx.fill();ctx.stroke();ctx.fillStyle="#111";ctx.font="bold 20px Arial";ctx.fillText(f[0],92,y+40);ctx.fillStyle="#b45309";ctx.font="14px Arial";ctx.fillText("⏱ "+f[1],92,y+66);
+    ctx.strokeStyle="#999";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(330,y+45);ctx.lineTo(470,300);ctx.stroke();});
+  ctx.fillStyle="#eff6ff";ctx.strokeStyle="#1d4ed8";ctx.lineWidth=3;roundRect(ctx,470,250,180,110,16);ctx.fill();ctx.stroke();
+  ctx.fillStyle="#111";ctx.font="bold 18px Arial";ctx.fillText("Neural net",500,300);ctx.font="14px Arial";ctx.fillStyle="#555";ctx.fillText("(Lessons 2–4)",505,326);
+  ctx.strokeStyle="#111";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(650,305);ctx.lineTo(720,305);ctx.stroke();
+  ctx.fillStyle="#ecfdf5";ctx.strokeStyle="#15803d";roundRect(ctx,720,262,180,86,16);ctx.fill();ctx.stroke();
+  ctx.fillStyle="#111";ctx.font="bold 18px Arial";ctx.fillText("Make %",760,312);
+  ctx.fillStyle="#92400e";ctx.font="italic 16px Arial";ctx.fillText("Measuring three numbers for thousands of shots is slow, expensive, and easy to get wrong.",70,470);
+}
+function drawPhoto(){
+  const {ctx,W}=stage();
+  renderShot(state.arc,state.close,state.clear,tmp);
+  const size=380;
+  drawImage(ctx,tmp,90,110,size);
+  ctx.fillStyle="#111";ctx.font="bold 20px Arial";ctx.fillText("A single \u201cphoto\u201d of the shot (10 × 10 pixels)",90,80);
+  // annotations
+  ctx.fillStyle="#1d4ed8";ctx.font="bold 15px Arial";ctx.fillText("↑ higher = higher arc",520,150);
+  ctx.fillStyle="#15803d";ctx.fillText("→ right = closer to goal",520,185);
+  ctx.fillStyle="#ea580c";ctx.fillText("brighter ball = clearer shot",520,220);
+  ctx.fillStyle="#333";ctx.font="15px Arial";
+  ctx.fillText("The bright blob is the ball. Its position and brightness",520,280);
+  ctx.fillText("encode the same three things you used to measure by hand —",520,304);
+  ctx.fillText("but now they are just pixels in an image.",520,328);
+  const t=reality(state.arc,state.close,state.clear);
+  ctx.fillStyle="#111";ctx.font="bold 18px Arial";ctx.fillText("True make chance for this shot: "+t.toFixed(1)+"%",520,400);
+}
+function drawPixelsToNet(){
+  const {ctx}=stage();
+  renderShot(state.arc,state.close,state.clear,tmp);
+  drawImage(ctx,tmp,70,150,300);
+  ctx.fillStyle="#111";ctx.font="bold 19px Arial";ctx.fillText("100 raw pixels",120,130);
+  // arrow to inputs column
+  ctx.strokeStyle="#111";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(380,300);ctx.lineTo(430,300);ctx.stroke();
+  ctx.fillStyle="#eff6ff";ctx.strokeStyle="#1d4ed8";ctx.lineWidth=2;roundRect(ctx,435,250,150,100,14);ctx.fill();ctx.stroke();
+  ctx.fillStyle="#111";ctx.font="bold 16px Arial";ctx.fillText("100 inputs",455,295);ctx.font="13px Arial";ctx.fillStyle="#555";ctx.fillText("(one per pixel)",455,318);
+  // hidden units
+  ctx.strokeStyle="#111";ctx.beginPath();ctx.moveTo(585,300);ctx.lineTo(650,300);ctx.stroke();
+  for(let h=0;h<H;h++){const y=140+h*72;ctx.fillStyle="#eef2ff";ctx.strokeStyle="#1d4ed8";ctx.beginPath();ctx.arc(690,y,22,0,7);ctx.fill();ctx.stroke();ctx.strokeStyle="#9ab";ctx.beginPath();ctx.moveTo(585,300);ctx.lineTo(668,y);ctx.stroke();}
+  ctx.fillStyle="#111";ctx.font="bold 15px Arial";ctx.fillText("hidden ReLU units",620,110);
+  ctx.strokeStyle="#111";ctx.lineWidth=2;for(let h=0;h<H;h++){const y=140+h*72;ctx.beginPath();ctx.moveTo(712,y);ctx.lineTo(820,300);ctx.stroke();}
+  ctx.fillStyle="#ecfdf5";ctx.strokeStyle="#15803d";roundRect(ctx,820,262,150,80,14);ctx.fill();ctx.stroke();
+  ctx.fillStyle="#111";ctx.font="bold 16px Arial";ctx.fillText("Make %",860,308);
+  ctx.fillStyle="#555";ctx.font="15px Arial";ctx.fillText("Same machine as before — only the input side changed: 3 features → 100 pixels.",70,500);
+}
+function drawTraining(){
+  const {ctx,W,H:HH}=stage();
+  const m={l:80,r:30,t:40,b:60},pw=W-m.l-m.r,ph=HH-m.t-m.b;
+  const hist=state.history.length?state.history:[{step:0,err:rmsePct()}];
+  const ymax=Math.max(10,...hist.map(p=>p.err))*1.05;
+  const xmax=Math.max(50,hist[hist.length-1].step);
+  const X0=s=>m.l+s/xmax*pw, Y0=e=>m.t+(1-e/ymax)*ph;
+  ctx.strokeStyle="#e5e7eb";ctx.lineWidth=1;ctx.fillStyle="#666";ctx.font="14px Arial";
+  for(let i=0;i<=5;i++){const e=ymax*i/5;ctx.beginPath();ctx.moveTo(m.l,Y0(e));ctx.lineTo(W-m.r,Y0(e));ctx.stroke();ctx.fillText(e.toFixed(0)+"%",m.l-48,Y0(e)+5);}
+  ctx.strokeStyle="#111";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(m.l,m.t);ctx.lineTo(m.l,HH-m.b);ctx.lineTo(W-m.r,HH-m.b);ctx.stroke();
+  ctx.fillStyle="#111";ctx.font="16px Arial";ctx.fillText("training step",W/2-40,HH-18);ctx.fillText("error (RMSE, make %)",14,26);
+  ctx.strokeStyle="#15803d";ctx.lineWidth=4;ctx.beginPath();hist.forEach((p,i)=>{const x=X0(p.step),y=Y0(p.err);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();
+  ctx.fillStyle="#111827";ctx.font="bold 18px Arial";ctx.fillText("Steps: "+state.steps+"    Error: "+rmsePct().toFixed(2)+"%",m.l+10,m.t+24);
+}
+function drawLearned(){
+  ensureTrained();
+  const {ctx,W}=stage();
+  ctx.fillStyle="#111";ctx.font="bold 20px Arial";ctx.fillText("The "+H+" features the network invented (hidden-unit pixel patterns)",60,42);
+  ctx.fillStyle="#555";ctx.font="14px Arial";ctx.fillText("Red = a pixel this unit likes,  blue = a pixel it dislikes. Each unit watches its own region of the photo.",60,66);
+  const size=150,gap=32,cols=3;
+  for(let h=0;h<H;h++){const col=h%cols,rw=Math.floor(h/cols);const x=70+col*(size+gap),y=100+rw*(size+56);drawHeat(ctx,h*D,x,y,size);ctx.fillStyle="#111";ctx.font="bold 15px Arial";ctx.fillText("Unit "+(h+1),x+size/2-26,y+size+24);}
+  // probe on the right
+  renderShot(state.arc,state.close,state.clear,tmp);
+  const px=640,py=110;drawImage(ctx,tmp,px,py,240);
+  ctx.fillStyle="#111";ctx.font="bold 17px Arial";ctx.fillText("Test shot",px+70,py-14);
+  const pred=forwardImg(tmp)*100, truth=reality(state.arc,state.close,state.clear);
+  ctx.font="bold 20px Arial";ctx.fillStyle="#1d4ed8";ctx.fillText("Network guess: "+pred.toFixed(1)+"%",px,py+300);
+  ctx.fillStyle="#111";ctx.fillText("True make chance: "+truth.toFixed(1)+"%",px,py+336);
+  ctx.fillStyle="#555";ctx.font="14px Arial";ctx.fillText("Move the sliders — the net predicts from pixels alone.",px,py+372);
+}
+function drawSummary(){
+  const {ctx,W}=stage();
+  ctx.fillStyle="#111";ctx.font="bold 22px Arial";ctx.fillText("From raw pixels to a prediction — features included",70,54);
+  const boxes=[["Photo","100 pixels","#8a7f6a"],["Learned features","hidden units the\nnetwork invented","#1d4ed8"],["Make %","final prediction","#15803d"]];
+  boxes.forEach((b,i)=>{const x=90+i*300;ctx.fillStyle="#fff";ctx.strokeStyle=b[2];ctx.lineWidth=3;roundRect(ctx,x,180,220,120,16);ctx.fill();ctx.stroke();ctx.fillStyle="#111";ctx.font="bold 20px Arial";ctx.fillText(b[0],x+22,220);ctx.fillStyle="#555";ctx.font="14px Arial";b[1].split("\n").forEach((t,j)=>ctx.fillText(t,x+22,248+j*20));if(i<2){ctx.strokeStyle="#111";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+220,240);ctx.lineTo(x+300,240);ctx.stroke();}});
+  ctx.fillStyle="#4c1d95";ctx.font="bold 17px Arial";ctx.fillText("The middle box used to be filled in by a human. Now the network fills it in itself.",70,400);
+  ctx.fillStyle="#555";ctx.font="16px Arial";ctx.fillText("Next: when the input is huge (a big image, or a sentence), how do we help the network",70,450);
+  ctx.fillText("share information across all those pixels or words? That is the Transformer — Lesson 6.",70,476);
+}
+
+// ---------- controls ----------
+function sliderRow(id,label,val,min,max,step){return `<label>${label}<span class="value" id="rv_${id}">${val}</span></label><input id="sl_${id}" type="range" min="${min}" max="${max}" step="${step}" value="${val}">`;}
+function shotSliders(){
+  return `<div class="controlBox"><div class="controlTitle">This shot</div>
+  ${sliderRow("arc","Shot arc",state.arc,0,100,1)}
+  ${sliderRow("close","Closeness to goal",state.close,0,100,1)}
+  ${sliderRow("clear","Shot clearness",state.clear,0,100,1)}</div>`;
+}
+function buildControls(){
+  let h="";
+  if(state.scene===1||state.scene===2){
+    h+=shotSliders();
+    h+=`<div class="note">Drag the sliders and watch the photo change. Nothing is measured — the numbers only decide how to draw the picture.</div>`;
+  }else if(state.scene===3){
+    h+=`<button class="green" id="train50">Train 50 steps</button>
+        <button class="orange" id="train300">Train 300 steps</button>
+        <button class="secondary" id="resetNet">Reset network</button>
+        <div class="metric" id="errBox">Error: ${rmsePct().toFixed(2)}%</div>
+        <div class="note">Same gradient descent as Lesson 4, just with far more knobs. Watch the error fall as it learns to read the pixels.</div>`;
+  }else if(state.scene===4){
+    h+=shotSliders();
+    h+=`<div class="note blueNote">These pixel patterns are the network's own "features." It was never told about arc, closeness, or clearness — it invented detectors that happen to capture them.</div>`;
+  }else if(state.scene===5){
+    h+=`<div class="note">Handing over raw data and letting the model learn its own features is called <b>representation learning</b>. It is the key shift that made modern AI possible.</div>`;
+  }else{
+    h+=`<div class="note">In Lessons 1–4 every feature (arc, closeness, clearness) had to be measured by a person before the network could use it.</div>`;
+  }
+  document.getElementById("controls").innerHTML=h;
+  wireControls();
+}
+function wireControls(){
+  ["arc","close","clear"].forEach(id=>{
+    const el=document.getElementById("sl_"+id);
+    if(el)el.addEventListener("input",()=>{state[id]=+el.value;const rv=document.getElementById("rv_"+id);if(rv)rv.textContent=el.value;render();});
+  });
+  const t50=document.getElementById("train50"),t300=document.getElementById("train300"),rs=document.getElementById("resetNet");
+  if(t50)t50.addEventListener("click",()=>animateTrain(50));
+  if(t300)t300.addEventListener("click",()=>animateTrain(300));
+  if(rs)rs.addEventListener("click",()=>{state.token++;initNet();state.steps=0;state.history=[{step:0,err:rmsePct()}];buildControls();render();});
+}
+async function animateTrain(total){
+  const token=++state.token;
+  const btns=[...document.querySelectorAll("#controls button")];btns.forEach(b=>b.disabled=true);
+  if(!state.history.length)state.history=[{step:0,err:rmsePct()}];
+  const chunk=10;
+  for(let done=0;done<total;done+=chunk){
+    if(token!==state.token)break;
+    trainSteps(chunk);
+    state.history.push({step:state.steps,err:rmsePct()});
+    const eb=document.getElementById("errBox");if(eb)eb.textContent="Error: "+rmsePct().toFixed(2)+"%";
+    render();
+    await new Promise(r=>requestAnimationFrame(r));
+  }
+  if(token===state.token)btns.forEach(b=>b.disabled=false);
+}
+
+// ---------- render dispatch ----------
+function render(){
+  document.getElementById("extra").innerHTML="";
+  if(state.scene===0)drawFeatureOverhead();
+  else if(state.scene===1)drawPhoto();
+  else if(state.scene===2)drawPixelsToNet();
+  else if(state.scene===3)drawTraining();
+  else if(state.scene===4)drawLearned();
+  else drawSummary();
+}
+function updateHeader(){
+  document.getElementById("sceneNo").textContent=`Scene ${state.scene+1} of ${scenes.length}`;
+  document.getElementById("question").textContent=scenes[state.scene][0];
+  document.getElementById("sentence").textContent=scenes[state.scene][1];
+  document.getElementById("prev").disabled=state.scene===0;
+  document.getElementById("next").textContent=state.scene===scenes.length-1?"Done":"Next →";
+}
+function buildScene(){state.token++;updateHeader();buildControls();render();}
+document.getElementById("prev").onclick=()=>{if(state.scene>0){state.scene--;buildScene()}};
+document.getElementById("next").onclick=()=>{if(state.scene<scenes.length-1){state.scene++;buildScene()}};
+buildScene();
+</script>
+</body>
+</html>

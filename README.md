@@ -22,6 +22,13 @@ Just open it in a browser (or visit the published site).
 4. **How the Computer Learns** (`lesson4_learning.html`)
    — Error, derivatives, gradient descent, computational graphs, and
    backpropagation — one operation at a time.
+5. **Learned Features** (`lesson5_learned_features.html`) — Instead of
+   hand-measuring features, feed the network a raw photo of the shot and
+   train it live; watch it invent its own feature detectors.
+6. **Transformers** (`lesson6_transformer.html`) — Connect the whole
+   course to a Transformer: the feed-forward layers are the ReLU machine
+   from earlier lessons, and attention lets the pieces of the input
+   (patches or words) share information.
 
 ## The unifying idea
 
