@@ -34,6 +34,11 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .value{float:right;font-weight:900}
 .metric{font-size:30px;font-weight:900;margin:12px 0}
 .eq{font-family:ui-monospace,Menlo,Consolas,monospace;background:#f3f0ea;border:1px solid #e5ded2;border-radius:12px;padding:14px;white-space:pre-wrap;line-height:1.5;font-size:13px}
+.mathBox{margin-top:8px}
+.mathBox>summary{cursor:pointer;font-weight:800;color:var(--blue);font-size:14px;list-style:none}
+.mathBox>summary::-webkit-details-marker{display:none}
+.mathBox>summary::before{content:"▸ ";color:var(--blue)}
+.mathBox[open]>summary::before{content:"▾ "}
 .note{background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;margin-top:12px;font-size:14px;line-height:1.45}
 .blueNote{background:#e0f2fe;border-color:#7dd3fc}
 .controlBox{background:#f5f3ff;border:1px solid #c4b5fd;border-radius:14px;padding:14px;margin:12px 0}
@@ -328,10 +333,12 @@ function buildControls(){
     h+=`<button class="green" id="gdStep">Take one gradient step</button>
     <button class="secondary" id="resetGD">Reset</button>
     <div class="metric">RMSE: ${rmseLine(state.bias,state.slope).toFixed(2)}</div>
-    <div class="eq">derivative = ${dBias().toFixed(4)}
-new bias = old bias − learning rate × derivative
-
-(RMSE produces smaller gradients than MSE, so larger learning rates are needed.)</div>`;
+    <div class="eq">slope of the error curve here = ${dBias().toFixed(4)}
+new bias = old bias − learning rate × (that slope)</div>
+    <div class="note">If the curve slopes up to the right, we move the bias left; if it slopes down, we move right. The learning rate sets how big each step is.</div>
+    <details class="mathBox"><summary>Show the math</summary>
+    <div class="eq">The "slope of the error curve" is the derivative ∂E/∂bias.
+Because we use RMSE (not MSE), these gradients are smaller, so a larger learning rate is needed here.</div></details>`;
   }else if(state.scene===4){
     h+=slider("bias","Bias",state.bias,-50,120,1);
     h+=slider("slope","Slope",state.slope,-2,2,.02);
@@ -340,11 +347,13 @@ new bias = old bias − learning rate × derivative
     h+=`<button class="green" id="gd2Step">Take one 2D gradient step</button>
     <button class="secondary" id="reset2D">Reset trajectory</button>
     <div class="metric">RMSE: ${rmseLine().toFixed(2)}</div>
-    <div class="eq">normalized gradient =
-(∂E/∂bias, ∂E/∂(50·slope))
-= (${g2.gb.toFixed(4)}, ${g2.gq.toFixed(4)})
-
-Both coordinates are scaled comparably before stepping.</div>
+    <div class="eq">downhill direction (which way to nudge each knob):
+   bias knob:  ${g2.gb.toFixed(3)}
+   slope knob: ${g2.gq.toFixed(3)}
+Each step moves opposite these numbers.</div>
+    <details class="mathBox"><summary>Show the math</summary>
+    <div class="eq">normalized gradient = (∂E/∂bias, ∂E/∂(50·slope)) = (${g2.gb.toFixed(4)}, ${g2.gq.toFixed(4)})
+The slope knob is scaled by 50 so both coordinates have a comparable effect before we step.</div></details>
     <div class="note">The black line records every step. Because the valley is narrow, the path can zig-zag from one side to the other while still moving downward overall.</div>`;
   }else if(state.scene===5){
     h+=slider("selectedSample","Input x",state.selectedSample,0,100,1);
@@ -695,7 +704,7 @@ function render(){
   else if(state.scene===4)drawContour();
   else if(state.scene===5){
     drawComputationalGraph();
-    document.getElementById("extra").innerHTML=`<div class="note blueNote"><b>Forward pass:</b> numbers move left to right. <b>Backward pass:</b> derivatives move right to left through the same operation boxes.</div>`;
+    document.getElementById("extra").innerHTML=`<div class="note blueNote"><b>Forward pass:</b> numbers move left to right. <b>Backward pass:</b> derivatives move right to left through the same operation boxes.<br>Read <b>∂E/∂w</b> as “how much the error changes if we nudge <b>w</b> a little” — exactly the slope idea from the earlier scenes, one knob at a time.</div>`;
   }else if(state.scene===6)drawNetworkScene();
   else drawTraining();
 }

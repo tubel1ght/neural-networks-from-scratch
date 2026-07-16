@@ -67,7 +67,7 @@ const scenes=[
 ["Can two hinges replace the line?","Remove the explicit line. Keep the output bias and combine two independently oriented ReLU hinges."],
 ["Does a third hinge help?","Three hinges provide three independently placed and oriented bends."],
 ["Does a fourth hinge help?","A fourth hinge expands the model family, so its best error can never be worse."],
-["Where is the neural network?","The same four-hinge model is now drawn in the conventional input → hidden → output form."]
+["Where is the neural network?","The same four-hinge model is now drawn in the usual input → hidden → output form. Each “ReLU” box is just a hinge — it stays at zero until its bend, then turns on."]
 ];
 function relu(z){return Math.max(0,z)}
 function reality(x){return 100*Math.exp(((x-50-.3*state.x2)**2)/-3000)*(Math.log((state.x2+10)/10)/Math.log(11))*(state.x3/100)}

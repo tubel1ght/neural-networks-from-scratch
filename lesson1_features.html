@@ -166,6 +166,8 @@ button:hover{filter:brightness(.95)}
 * exp((x1-50-0.3*x2)^2 / -3000)
 * ln((x2+10)/10) / ln(11)
 * (x3/100)</textarea>
+    <button id="resetEq" type="button" style="width:auto;font-size:13px;font-weight:700;padding:6px 12px;margin-top:8px;background:#f5f5f5;color:#222;border-color:#999">Reset equation</button>
+    <p class="small" style="margin-top:10px">See the <b>−0.3·x2</b> tucked inside the arc part? That's the one place the features interact: the <b>ideal arc shifts a little as the shot gets closer</b> to the goal (closer shots want a slightly higher arc). It's why the make-probability "sweet spot" drifts as you change closeness.</p>
 
     <label>Color points by</label>
     <select id="colorBy">
@@ -233,6 +235,8 @@ const lockedColorScale = [
   [0.5, "#2fb47c"],
   [1.0, "#440154"]
 ];
+
+const DEFAULT_EQUATION = document.getElementById("equation").value;
 
 function getNum(id){
   return Number(document.getElementById(id).value);
@@ -334,13 +338,18 @@ function clearError(){
 function updatePlot(){
   clearError();
 
+  if(typeof Plotly === "undefined"){
+    showError("Couldn't load the 3D plotting library (Plotly). This lesson needs an internet connection the first time it opens — please reconnect and reload the page.");
+    return;
+  }
+
   let obj;
   try{
     obj = makeEvaluator();
     const test = evalScore(obj,50,50,50);
-    if(!Number.isFinite(test)) throw new Error("Equation returned a non-finite value at x1=50, x2=50, x3=50.");
+    if(!Number.isFinite(test)) throw new Error("At x1=50, x2=50, x3=50 the equation gave a value that isn't a real number — maybe a divide-by-zero or ln of a negative. Adjust it, or press “Reset equation”.");
   }catch(e){
-    showError("Equation error: " + e.message);
+    showError("That equation couldn't be read. Check for typos like a missing ) or *, then try again — or press “Reset equation” to restore the original.\n\nDetails: " + e.message);
     return;
   }
 
@@ -417,6 +426,10 @@ document.getElementById("equation").addEventListener("keydown", e=>{
   if((e.metaKey || e.ctrlKey) && e.key === "Enter") updatePlot();
 });
 document.getElementById("equation").addEventListener("input", clearError);
+document.getElementById("resetEq").addEventListener("click", ()=>{
+  document.getElementById("equation").value = DEFAULT_EQUATION;
+  updatePlot();
+});
 
 updatePlot();
 </script>
