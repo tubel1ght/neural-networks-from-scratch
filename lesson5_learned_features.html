@@ -78,15 +78,15 @@ canvas{width:100%;height:600px;border:1px solid #eadfce;border-radius:16px;backg
 // ---------- shared "reality" (same make-probability as Lessons 1-4) ----------
 function reality(a,c,q){
   const arc=Math.exp(-((a-50-0.3*c)**2)/3000);
-  const close=Math.log((c+10)/10)/Math.log(11);
+  const dist=Math.log((110-c)/10)/Math.log(11);
   const clear=q/100;
-  return 100*arc*close*clear;
+  return 100*arc*dist*clear;
 }
 
 // ---------- the "photo": a tiny GxG image of the shot ----------
 const G=10, D=G*G, H=6;
 // arc  -> vertical position of the ball (higher arc = higher up)
-// close-> horizontal position (closer = nearer the goal on the right)
+// dist -> horizontal position (larger distance = farther right)
 // clear-> brightness/contrast of the ball
 function renderShot(a,c,q,out){
   const row=(1-a/100)*(G-1), col=(c/100)*(G-1), bright=0.35+0.65*(q/100);
@@ -142,8 +142,8 @@ const state={scene:0,arc:70,close:60,clear:80,steps:0,history:[],training:false,
 initNet();
 
 const scenes=[
-["The features were expensive","Until now a human had to measure the arc, closeness, and clearness of every single shot to train the model. For thousands of shots, that is a lot of tedious work."],
-["The lazy idea: just use the photo","What if we skip the measuring and simply snap a photo of the shot? The picture already contains the arc, the closeness, and how clear the shot is — we just have to let the computer read it."],
+["The features were expensive","Until now a human had to measure the arc, distance, and clearness of every single shot to train the model. For thousands of shots, that is a lot of tedious work."],
+  ["The lazy idea: just use the photo","What if we skip the measuring and simply snap a photo of the shot? The picture already contains the arc, the distance, and how clear the shot is — we just have to let the computer read it."],
 ["Pixels become the inputs","Flatten the photo into its raw pixels. Instead of 3 hand-made features, the network now takes 100 pixel numbers and the same hidden layer of ReLU units you already built."],
 ["Let it learn from pixels","Run gradient descent (Lesson 4) on the pixels. With no idea what \u201carc\u201d or \u201cclearness\u201d mean, the network tunes itself until its make-probability matches reality."],
 ["What did it invent?","Look inside: each hidden unit has learned to respond to a pattern of pixels — its own feature detector. We never named these features; the network discovered them."],
@@ -172,7 +172,7 @@ function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+
 function drawFeatureOverhead(){
   const {ctx,W}=stage();
   ctx.fillStyle="#111";ctx.font="bold 20px Arial";ctx.fillText("The old way: a human measures 3 features for every shot",60,46);
-  const feats=[["Shot arc","measured by hand","#1d4ed8"],["Closeness to goal","measured by hand","#15803d"],["Shot clearness","measured by hand","#ea580c"]];
+  const feats=[["Shot arc","measured by hand","#1d4ed8"],["Distance to goal","measured by hand","#15803d"],["Shot clearness","measured by hand","#ea580c"]];
   feats.forEach((f,i)=>{const y=120+i*130;ctx.fillStyle="#fff";ctx.strokeStyle=f[2];ctx.lineWidth=3;roundRect(ctx,70,y,260,90,16);ctx.fill();ctx.stroke();ctx.fillStyle="#111";ctx.font="bold 20px Arial";ctx.fillText(f[0],92,y+40);ctx.fillStyle="#b45309";ctx.font="14px Arial";ctx.fillText("⏱ "+f[1],92,y+66);
     ctx.strokeStyle="#999";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(330,y+45);ctx.lineTo(470,300);ctx.stroke();});
   ctx.fillStyle="#eff6ff";ctx.strokeStyle="#1d4ed8";ctx.lineWidth=3;roundRect(ctx,470,250,180,110,16);ctx.fill();ctx.stroke();
@@ -190,7 +190,7 @@ function drawPhoto(){
   ctx.fillStyle="#111";ctx.font="bold 20px Arial";ctx.fillText("A single \u201cphoto\u201d of the shot (10 × 10 pixels)",90,80);
   // annotations
   ctx.fillStyle="#1d4ed8";ctx.font="bold 15px Arial";ctx.fillText("↑ higher = higher arc",520,150);
-  ctx.fillStyle="#15803d";ctx.fillText("→ right = closer to goal",520,185);
+  ctx.fillStyle="#15803d";ctx.fillText("→ right = farther from goal",520,185);
   ctx.fillStyle="#ea580c";ctx.fillText("brighter ball = clearer shot",520,220);
   ctx.fillStyle="#333";ctx.font="15px Arial";
   ctx.fillText("The bright blob is the ball. Its position and brightness",520,280);
@@ -262,7 +262,7 @@ function sliderRow(id,label,val,min,max,step){return `<label>${label}<span class
 function shotSliders(){
   return `<div class="controlBox"><div class="controlTitle">This shot</div>
   ${sliderRow("arc","Shot arc",state.arc,0,100,1)}
-  ${sliderRow("close","Closeness to goal",state.close,0,100,1)}
+  ${sliderRow("close","Distance to goal",state.close,0,100,1)}
   ${sliderRow("clear","Shot clearness",state.clear,0,100,1)}</div>`;
 }
 function buildControls(){
@@ -278,11 +278,11 @@ function buildControls(){
         <div class="note">Same gradient descent as Lesson 4, just with far more knobs. Watch the error fall as it learns to read the pixels.</div>`;
   }else if(state.scene===4){
     h+=shotSliders();
-    h+=`<div class="note blueNote">These pixel patterns are the network's own "features." It was never told about arc, closeness, or clearness — it invented detectors that happen to capture them.</div>`;
+    h+=`<div class="note blueNote">These pixel patterns are the network's own "features." It was never told about arc, distance, or clearness — it invented detectors that happen to capture them.</div>`;
   }else if(state.scene===5){
     h+=`<div class="note">Handing over raw data and letting the model learn its own features is called <b>representation learning</b>. It is the key shift that made modern AI possible.</div>`;
   }else{
-    h+=`<div class="note">In Lessons 1–4 every feature (arc, closeness, clearness) had to be measured by a person before the network could use it.</div>`;
+    h+=`<div class="note">In Lessons 1–4 every feature (arc, distance, clearness) had to be measured by a person before the network could use it.</div>`;
   }
   document.getElementById("controls").innerHTML=h;
   wireControls();

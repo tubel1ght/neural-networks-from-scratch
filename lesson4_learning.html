@@ -134,10 +134,10 @@ const scenes=[
 
 function reality(x){
   // A 1-feature slice of the shared make-probability model from Lessons 1-3:
-  // vary the shot arc x, holding closeness = 50 and clearness = 100 fixed.
+  // vary the shot arc x, holding distance = 50 and clearness = 100 fixed.
   const arc=Math.exp(-((x-65)*(x-65))/3000);
-  const close=Math.log(60/10)/Math.log(11);
-  return 100*arc*close;
+  const dist=Math.log((110-50)/10)/Math.log(11);
+  return 100*arc*dist;
 }
 function lineModel(x,b=state.bias,m=state.slope){return b+m*x}
 function mseLine(b=state.bias,m=state.slope){

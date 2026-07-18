@@ -144,7 +144,7 @@ button:hover{filter:brightness(.95)}
 <body>
 <header>
   <h1>What makes a shot go in?</h1>
-  <p class="subtitle">Explore how the chance of making a shot changes with the shot's arc, its closeness to the goal, and how clear the shot is.</p>
+  <p class="subtitle">Explore how the chance of making a shot changes with the shot's arc, its distance to the goal, and how clear the shot is.</p>
   <nav class="lessonNav">
     <a href="index.html">Home</a>
     <a href="lesson1_features.html" class="active">1 · Features</a>
@@ -159,47 +159,47 @@ button:hover{filter:brightness(.95)}
 <div class="wrap">
   <section class="panel controls">
     <span class="pill">x1 = shot arc</span>
-    <span class="pill">x2 = closeness to goal</span>
+    <span class="pill">x2 = distance to goal</span>
     <span class="pill">x3 = shot clearness</span>
-
-    <h2>Reality equation</h2>
-    <p class="small">This hidden "truth" turns three shot features into a make-probability (0–100%). You can edit it, but you never need to understand it.</p>
-    <textarea id="equation" spellcheck="false">100
-* exp((x1-50-0.3*x2)^2 / -3000)
-* ln((x2+10)/10) / ln(11)
-* (x3/100)</textarea>
-    <button id="resetEq" type="button" style="width:auto;font-size:13px;font-weight:700;padding:6px 12px;margin-top:8px;background:#f5f5f5;color:#222;border-color:#999">Reset equation</button>
-    <p class="small" style="margin-top:10px">See the <b>−0.3·x2</b> tucked inside the arc part? That's the one place the features interact: the <b>ideal arc shifts a little as the shot gets closer</b> to the goal (closer shots want a slightly higher arc). It's why the make-probability "sweet spot" drifts as you change closeness.</p>
 
     <label>Color points by</label>
     <select id="colorBy">
       <option value="none">None</option>
-      <option value="x1">x1 shot arc</option>
-      <option value="x2">x2 closeness to goal</option>
-      <option value="x3">x3 shot clearness</option>
-      <option value="score">make probability</option>
+      <option value="x1">x1 (shot arc)</option>
+      <option value="x2">x2 (distance)</option>
+      <option value="x3" selected>x3 (shot clarity)</option>
+      <option value="score">y (make probability)</option>
     </select>
 
-    <h3>Visible slice filters</h3>
+    <h3>Visible Slice</h3>
     <p class="small">Choose which generated dots are displayed. The axes stay fixed at 0–100 so slices are visually comparable.</p>
 
-    <label>x1 slice</label>
+    <label>x1 (shot arc)</label>
     <div class="two">
       <div><span class="small">start</span><input id="x1SliceMin" type="number" min="0" max="100" step="1" value="0"></div>
       <div><span class="small">end</span><input id="x1SliceMax" type="number" min="0" max="100" step="1" value="100"></div>
     </div>
 
-    <label>x2 slice</label>
+    <label>x2 (distance)</label>
     <div class="two">
       <div><span class="small">start</span><input id="x2SliceMin" type="number" min="0" max="100" step="1" value="0"></div>
       <div><span class="small">end</span><input id="x2SliceMax" type="number" min="0" max="100" step="1" value="100"></div>
     </div>
 
-    <label>x3 slice</label>
+    <label>x3 (shot clarity)</label>
     <div class="two">
       <div><span class="small">start</span><input id="x3SliceMin" type="number" min="0" max="100" step="1" value="0"></div>
       <div><span class="small">end</span><input id="x3SliceMax" type="number" min="0" max="100" step="1" value="100"></div>
     </div>
+
+    <h2>Reality equation</h2>
+    <p class="small">This hidden "truth" turns three shot features into a make-probability (0–100%). You can edit it, but you never need to understand it.</p>
+    <textarea id="equation" spellcheck="false">100
+* exp((x1-50-0.3*x2)^2 / -3000)
+* ln((110-x2)/10) / ln(11)
+* (x3/100)</textarea>
+    <button id="resetEq" type="button" style="width:auto;font-size:13px;font-weight:700;padding:6px 12px;margin-top:8px;background:#f5f5f5;color:#222;border-color:#999">Reset equation</button>
+    <p class="small" style="margin-top:10px">See the <b>−0.3·x2</b> tucked inside the arc part? That's the one place the features interact: the <b>ideal arc shifts a little with distance</b> — farther shots want a slightly higher arc. It's why the make-probability "sweet spot" drifts as you change distance.</p>
 
     <div style="margin-top:18px">
       <button id="applyBtn">Apply</button>
@@ -320,7 +320,7 @@ function colorInfo(d){
   const colorBy = document.getElementById("colorBy").value;
   if(colorBy === "none") return {values:null, title:"", phrase:"no coloring"};
   if(colorBy === "x1") return {values:d.xs, title:"x1 arc", cmin:0, cmax:100};
-  if(colorBy === "x2") return {values:d.x2s, title:"x2 closeness", cmin:0, cmax:100};
+  if(colorBy === "x2") return {values:d.x2s, title:"x2 distance", cmin:0, cmax:100};
   if(colorBy === "x3") return {values:d.x3s, title:"x3 clearness", cmin:0, cmax:100};
   return {values:d.scores, title:"make %", cauto:true};
 }
@@ -398,7 +398,7 @@ function updatePlot(){
     marker,
     text:d.xs.map((x1,i)=>
       `x1 shot arc: ${x1.toFixed(1)}<br>`+
-      `x2 closeness: ${d.x2s[i].toFixed(1)}<br>`+
+      `x2 distance: ${d.x2s[i].toFixed(1)}<br>`+
       `x3 clearness: ${d.x3s[i].toFixed(1)}<br>`+
       `make chance: ${d.scores[i].toFixed(1)}%`
     ),
@@ -410,9 +410,10 @@ function updatePlot(){
     paper_bgcolor:"#ffffff",
     plot_bgcolor:"#ffffff",
     scene:{
-      xaxis:{title:"x1 shot arc", range:[0,100]},
-      yaxis:{title:"x2 closeness to goal", range:[0,100]},
-      zaxis:{title:"make probability (%)"}
+      xaxis:{title:"x1 (shot arc)", range:[0,100]},
+      yaxis:{title:"x2 (distance to goal)", range:[0,100]},
+      zaxis:{title:"make probability (%)"},
+      camera:{eye:{x:0.35, y:-2.0, z:0.75}, up:{x:0, y:0, z:1}}
     },
     uirevision:"keep-camera"
   };

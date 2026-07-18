@@ -72,7 +72,7 @@ const scenes=[
 ["Where is the neural network?","The same four-hinge model is now drawn in the usual input → hidden → output form. Each “ReLU” box is just a hinge — it stays at zero until its bend, then turns on."]
 ];
 function relu(z){return Math.max(0,z)}
-function reality(x){return 100*Math.exp(((x-50-.3*state.x2)**2)/-3000)*(Math.log((state.x2+10)/10)/Math.log(11))*(state.x3/100)}
+function reality(x){return 100*Math.exp(((x-50-.3*state.x2)**2)/-3000)*(Math.log((110-state.x2)/10)/Math.log(11))*(state.x3/100)}
 function activeK(){return state.scene<=1?0:state.scene===2?2:state.scene===3?3:4}
 function useLine(){return state.scene===0}
 function neuronY(n,x){return n.a*relu(n.w*(x-n.c))}
@@ -109,7 +109,7 @@ function directionControls(){
 function buildControls(){
   let h="";
   if(state.scene<5){
-    h+=slider("x2","Closeness to goal",state.x2,0,100,1);
+    h+=slider("x2","Distance to goal",state.x2,0,100,1);
     h+=slider("x3","Shot clearness",state.x3,0,100,1);
   }
   h+=slider("outBias","Output bias",state.outBias,-120,120,.5);

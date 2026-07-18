@@ -103,7 +103,7 @@ const scenes=[
 ["What happens when a hinge gets a second input?","Explore one adjustable ramp. Two input weights control its tilt; one bias controls where the flat region meets the slope."],
 ["Where does the ramp turn on?","Reveal the turn-on line (the “activation boundary”): on one side the ramp is flat at zero, on the other it tilts upward as a sloped plane."],
 ["How do the weights rotate the boundary?","Compare the 3D ramp with a top-down view. Changing w₁ and w₂ rotates the cut through feature space."],
-["What two-feature reality are we trying to model?","Now reveal the make-probability landscape produced by a shot's arc and its closeness to the goal."],
+["What two-feature reality are we trying to model?","Now reveal the make-probability landscape produced by a shot's arc and its distance to the goal."],
 ["Can one ramp fit the landscape?","Try one ramp against reality. A single planar bend cannot capture the whole curved landscape."],
 ["Can two ramps do better?","Add two independently oriented ramps and inspect their individual contributions and their sum."],
 ["Does a third ramp help?","A third ramp gives the model more flexibility, so it can hug the landscape more closely — its best possible error can only get smaller, never larger."],
@@ -113,7 +113,7 @@ const scenes=[
 
 function relu(z){return Math.max(0,z)}
 function reality(x1,x2){
-  return 100*Math.exp(((x1-50-0.3*x2)**2)/-3000)*(Math.log((x2+10)/10)/Math.log(11))*(state.x3/100);
+  return 100*Math.exp(((x1-50-0.3*x2)**2)/-3000)*(Math.log((110-x2)/10)/Math.log(11))*(state.x3/100);
 }
 function rampValue(r,x1,x2){return r.a*relu(r.w1*x1+r.w2*x2+r.b)}
 function activeK(){return state.scene<5?1:state.scene===5?2:3}
@@ -137,7 +137,7 @@ function sceneLayout(title,zRange=[0,120]){
     paper_bgcolor:"#fff",plot_bgcolor:"#fff",
     scene:{
       xaxis:{title:"Shot arc x₁",range:[0,100]},
-      yaxis:{title:"Closeness x₂",range:[0,100]},
+      yaxis:{title:"Distance x₂",range:[0,100]},
       zaxis:{title:"Make % / ramp output",range:zRange},
       camera:state.camera,
       aspectmode:"cube"
@@ -236,7 +236,7 @@ function buildControls(){
     h+=rampControls(0);
     h+=`<div class="note"><b>One ramp:</b> z = max(0, w₁x₁ + w₂x₂ + b). The <code>max(0, …)</code> is the “ReLU”: it keeps the ramp flat at zero until the bend, then lets it rise. The weights tilt and rotate it; the bias slides the turn-on line.</div>`;
   }else if(state.scene===3){
-    h+=`<div class="note">Reality depends nonlinearly on both inputs. Rotate the surface and look for the arc “sweet spot” shifting as closeness changes.</div>`;
+    h+=`<div class="note">Reality depends nonlinearly on both inputs. Rotate the surface and look for the arc “sweet spot” shifting as distance changes.</div>`;
   }else if(state.scene>=4 && state.scene<=7){
     h+=slider("outBias","Output bias",state.outBias,-100,120,.5);
     const k=state.scene===4?1:state.scene===5?2:3;
@@ -446,7 +446,7 @@ function renderSplit(){
   <div class="plotCard"><div class="plotTitle">Top-down view (before the bend)</div><div id="top2d" class="smallPlot"></div></div></div>`;
   const r=state.ramps[0];
   Plotly.react("ramp3d",[surfaceTrace(grid((x1,x2)=>relu(r.w1*x1+r.w2*x2+r.b)),"Ramp",.95,"Blues"),boundaryTrace(r)],sceneLayout("",[-10,120]),{responsive:true,displaylogo:false});
-  Plotly.react("top2d",topDownData(r),{margin:{l:55,r:15,t:15,b:50},xaxis:{title:"Shot arc x₁",range:[0,100]},yaxis:{title:"Closeness x₂",range:[0,100],scaleanchor:"x"},paper_bgcolor:"#fff",plot_bgcolor:"#fff",showlegend:false},{responsive:true,displaylogo:false});
+  Plotly.react("top2d",topDownData(r),{margin:{l:55,r:15,t:15,b:50},xaxis:{title:"Shot arc x₁",range:[0,100]},yaxis:{title:"Distance x₂",range:[0,100],scaleanchor:"x"},paper_bgcolor:"#fff",plot_bgcolor:"#fff",showlegend:false},{responsive:true,displaylogo:false});
   bindCamera("ramp3d");
 }
 function renderReality(){
@@ -498,7 +498,7 @@ function renderNetwork(){
   s+=`<text class="layer" x="1020" y="35">Error</text>`;
 
   rect(110,155,155,65,"node","Shot arc","x₁");
-  rect(110,330,155,65,"node","Closeness","x₂");
+  rect(110,330,155,65,"node","Distance","x₂");
 
   const ys=[105,245,385];
   ys.forEach((y,i)=>{
