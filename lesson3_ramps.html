@@ -47,6 +47,24 @@ button:disabled{opacity:.55;cursor:wait}
 .edge{stroke:#555;stroke-width:1.8}.wlabel{font-size:13px;fill:#dc2626;font-weight:800;text-anchor:middle}.alabel{font-size:13px;fill:#ea580c;font-weight:800;text-anchor:middle}.layer{font-size:16px;fill:#111;text-anchor:middle;font-weight:900}
 .countCard{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:16px}
 .countItem{background:#fff;border:1px solid #ddd;border-radius:14px;padding:18px;text-align:center}.countBig{font-size:38px;font-weight:900}
+.mxScene{padding:16px 10px}
+.mxTitle{font-size:21px;font-weight:900;text-align:center;margin:2px 0 4px}
+.mxRow{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px;margin:18px 0}
+.mat{display:inline-flex;flex-direction:column;gap:4px;padding:8px 14px;position:relative}
+.mat:before,.mat:after{content:"";position:absolute;top:2px;bottom:2px;width:9px;border:2.5px solid #111827}
+.mat:before{left:0;border-right:none;border-radius:5px 0 0 5px}
+.mat:after{right:0;border-left:none;border-radius:0 5px 5px 0}
+.mrow{display:flex;gap:10px;justify-content:center}
+.cell{min-width:40px;text-align:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800;font-size:15px;padding:2px 4px;color:#111827}
+.cell.param{color:#dc2626}
+.hl{background:#fef3c7;border-radius:6px;padding:1px 4px}
+.op{font-size:26px;font-weight:900;color:#555}
+.matCap{text-align:center;font-size:12px;color:#555;font-weight:700;margin-top:6px}
+.mxNote{background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px;margin:16px auto 0;max-width:920px;font-size:15px;line-height:1.5}
+.mxNote .param{color:#dc2626;font-weight:800}
+.mxSteps{display:flex;gap:8px;margin-bottom:6px}
+.mxSteps button{margin-top:0;padding:9px 12px;font-size:14px}
+.mxSteps button.activeStep{background:#111827;border-color:#111827;color:#fff}
 @media(max-width:1000px){.wrap{grid-template-columns:1fr}.side{position:static;max-height:none}.plotGrid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -78,6 +96,9 @@ button:disabled{opacity:.55;cursor:wait}
 </section>
 
 <main class="panel">
+  <div id="plotToolbar" style="display:flex;justify-content:flex-end;margin-bottom:8px">
+    <button id="resetView" class="secondary" style="margin-top:0;padding:8px 13px;font-size:14px">⟲ Reset view</button>
+  </div>
   <div id="plotArea"></div>
   <svg id="network" viewBox="0 0 1100 500"></svg>
   <div id="countArea"></div>
@@ -88,8 +109,15 @@ button:disabled{opacity:.55;cursor:wait}
 const N=31;
 const axis=Array.from({length:N},(_,i)=>100*i/(N-1));
 const trainAxis=Array.from({length:11},(_,i)=>100*i/10);
+// A wider domain for the single-ramp "understanding" scenes, so the fold line
+// and both sides of a ramp are visible beyond the 0-100 observation box.
+const WLO=-40, WHI=140, WIDE_Z=[-150,150];
+const wideAxis=Array.from({length:46},(_,i)=>WLO+(WHI-WLO)*i/45);
+const DEFAULT_CAMERA={eye:{x:1.55,y:1.55,z:1.15}};
+const INK="#111827", PARAM="#dc2626";
 const state={
   scene:0,
+  matrixStep:0,
   x3:50,
   outBias:0,
   ramps:[
@@ -97,7 +125,7 @@ const state={
     {w1:-0.8,w2:0.9,b:-15,a:1},
     {w1:0.5,w2:-1.0,b:30,a:-1}
   ],
-  camera:{eye:{x:1.55,y:1.55,z:1.15}}
+  camera:JSON.parse(JSON.stringify(DEFAULT_CAMERA))
 };
 const scenes=[
 ["What happens when a hinge gets a second input?","Explore one adjustable ramp. Two input weights control its tilt; one bias controls where the flat region meets the slope."],
@@ -108,12 +136,13 @@ const scenes=[
 ["Can two ramps do better?","Add two independently oriented ramps and inspect their individual contributions and their sum."],
 ["Does a third ramp help?","A third ramp gives the model more flexibility, so it can hug the landscape more closely — its best possible error can only get smaller, never larger."],
 ["Where is the neural network?","The same three-ramp model is now shown as a standard two-input, one-hidden-layer neural network."],
+["From network to matrix multiply","Add one more input, then watch the whole layer collapse into a single matrix multiply — the operation GPUs are built to run fast."],
 ["Why do we need learning?","Even this tiny model already has many parameters. Larger models make manual tuning impossible."]
 ];
 
 function relu(z){return Math.max(0,z)}
 function reality(x1,x2){
-  return 100*Math.exp(((x1-50-0.3*x2)**2)/-3000)*(Math.log((110-x2)/10)/Math.log(11))*(state.x3/100);
+  return 100*Math.exp(((x1-40-0.3*x2)**2)/-3000)*(Math.log((110-x2)/10)/Math.log(11))*(state.x3/100);
 }
 function rampValue(r,x1,x2){return r.a*relu(r.w1*x1+r.w2*x2+r.b)}
 function activeK(){return state.scene<5?1:state.scene===5?2:3}
@@ -130,14 +159,14 @@ function rmse(k=activeK()){
   }
   return Math.sqrt(s/n);
 }
-function sceneLayout(title,zRange=[0,120]){
+function sceneLayout(title,zRange=[0,120],xyRange=[0,100]){
   return {
     title:{text:title,font:{size:16}},
     margin:{l:0,r:0,t:45,b:0},
     paper_bgcolor:"#fff",plot_bgcolor:"#fff",
     scene:{
-      xaxis:{title:"Shot arc x₁",range:[0,100]},
-      yaxis:{title:"Distance x₂",range:[0,100]},
+      xaxis:{title:"Shot arc x₁",range:xyRange},
+      yaxis:{title:"Distance x₂",range:xyRange},
       zaxis:{title:"Make % / ramp output",range:zRange},
       camera:state.camera,
       aspectmode:"cube"
@@ -145,27 +174,34 @@ function sceneLayout(title,zRange=[0,120]){
     showlegend:false
   };
 }
-function surfaceTrace(z,name,opacity=1,colorscale="Viridis"){
-  return {type:"surface",x:axis,y:axis,z,name,opacity,colorscale,showscale:false,hovertemplate:"x₁=%{x:.1f}<br>x₂=%{y:.1f}<br>z=%{z:.2f}<extra></extra>"};
+function surfaceTrace(z,name,opacity=1,colorscale="Viridis",ax=axis){
+  return {type:"surface",x:ax,y:ax,z,name,opacity,colorscale,showscale:false,hovertemplate:"x₁=%{x:.1f}<br>x₂=%{y:.1f}<br>z=%{z:.2f}<extra></extra>"};
 }
-function boundaryTrace(r){
+// Translucent outline of the 0-100 observation box, drawn at z=0 so students
+// can see where the training data lives relative to the extended ramp.
+function dataBoxTrace(){
+  return {type:"scatter3d",mode:"lines",
+    x:[0,100,100,0,0],y:[0,0,100,100,0],z:[0,0,0,0,0],
+    line:{width:5,color:"#111827"},name:"data box (0–100)",hoverinfo:"skip"};
+}
+function boundaryTrace(r,lo=0,hi=100,ax=axis){
   const pts=[];
   if(Math.abs(r.w2)>1e-8){
-    for(const x of axis){
+    for(const x of ax){
       const y=-(r.w1*x+r.b)/r.w2;
-      if(y>=0&&y<=100)pts.push([x,y]);
+      if(y>=lo&&y<=hi)pts.push([x,y]);
     }
   }else if(Math.abs(r.w1)>1e-8){
     const x=-r.b/r.w1;
-    if(x>=0&&x<=100)for(const y of axis)pts.push([x,y]);
+    if(x>=lo&&x<=hi)for(const y of ax)pts.push([x,y]);
   }
   return {type:"scatter3d",mode:"lines",x:pts.map(p=>p[0]),y:pts.map(p=>p[1]),z:pts.map(()=>0),line:{width:8},name:"Activation boundary",hoverinfo:"skip"};
 }
-function topDownData(r){
-  const z=grid((x1,x2)=>r.w1*x1+r.w2*x2+r.b);
+function topDownData(r,ax=axis){
+  const z=grid((x1,x2)=>r.w1*x1+r.w2*x2+r.b,ax);
   return [
-    {type:"heatmap",x:axis,y:axis,z,colorscale:"RdBu",zmid:0,showscale:false,hovertemplate:"x₁=%{x:.1f}<br>x₂=%{y:.1f}<br>before bend=%{z:.2f}<extra></extra>"},
-    {type:"contour",x:axis,y:axis,z,contours:{start:0,end:0,size:1,coloring:"lines"},line:{width:4},showscale:false,hoverinfo:"skip"}
+    {type:"heatmap",x:ax,y:ax,z,colorscale:"RdBu",zmid:0,showscale:false,hovertemplate:"x₁=%{x:.1f}<br>x₂=%{y:.1f}<br>before bend=%{z:.2f}<extra></extra>"},
+    {type:"contour",x:ax,y:ax,z,contours:{start:0,end:0,size:1,coloring:"lines"},line:{width:4},showscale:false,hoverinfo:"skip"}
   ];
 }
 function bindCamera(id){
@@ -177,6 +213,16 @@ function bindCamera(id){
   });
 }
 let cameraSyncInProgress=false;
+// Snap every 3D plot currently on the page back to the default camera angle.
+function resetView(){
+  state.camera=JSON.parse(JSON.stringify(DEFAULT_CAMERA));
+  cameraSyncInProgress=true;
+  const ids=["mainPlot","ramp3d","realityPlot","sumPlot","rampPlot0","rampPlot1","rampPlot2"];
+  const updates=ids
+    .filter(id=>{const el=document.getElementById(id);return el&&el._fullLayout&&el._fullLayout.scene;})
+    .map(id=>Plotly.relayout(id,{"scene.camera":state.camera}));
+  Promise.allSettled(updates).finally(()=>{cameraSyncInProgress=false;});
+}
 function syncCameras(ids){
   ids.forEach(id=>{
     const el=document.getElementById(id);
@@ -228,13 +274,13 @@ function equation(k=activeK()){
 function buildControls(){
   let h="";
   if(state.scene>=3 && state.scene<=7){
-    h+=`<div class="realityBox"><div class="realityTitle">Reality setup</div>
-    <div class="realityText">Default: 50. Keep it fixed while comparing models, or move it to see how the target landscape changes.</div>
-    ${slider("x3","Shot clearness",state.x3,10,100,1)}</div>`;
+    h+=`<div class="realityBox"><div class="realityTitle">Fixed input</div>
+    <div class="realityText">This describes the shot itself (the reality). Keep it fixed while tuning the model below, or move it to reshape the target landscape.</div>
+    ${slider("x3","x3 (goal visibility)",state.x3,10,100,1)}</div>`;
   }
   if(state.scene<=2){
     h+=rampControls(0);
-    h+=`<div class="note"><b>One ramp:</b> z = max(0, w₁x₁ + w₂x₂ + b). The <code>max(0, …)</code> is the “ReLU”: it keeps the ramp flat at zero until the bend, then lets it rise. The weights tilt and rotate it; the bias slides the turn-on line.</div>`;
+    h+=`<div class="note"><b>One ramp:</b> z = max(0, w₁x₁ + w₂x₂ + b). The <code>max(0, …)</code> is the “ReLU”: it keeps the ramp flat at zero until the bend, then lets it rise. The weights tilt and rotate it; the bias slides the turn-on line. The output direction <b>a₁</b> flips the whole ramp over: <b>+1</b> makes it rise, <b>−1</b> makes it fall — exactly like a hinge pointing up or down in Lesson 2. The dashed square marks the <b>0–100 data region</b>; the surface is drawn a bit beyond it (like the hinges in Lesson 2) so you can see the whole ramp and where its fold line sits.</div>`;
   }else if(state.scene===3){
     h+=`<div class="note">Reality depends nonlinearly on both inputs. Rotate the surface and look for the arc “sweet spot” shifting as distance changes.</div>`;
   }else if(state.scene>=4 && state.scene<=7){
@@ -245,6 +291,14 @@ function buildControls(){
          <div class="metric" id="errorBox">Error: ${rmse(k).toFixed(3)}</div>
          <div class="eq" id="modelEq">${equation(k)}</div>`;
   }else if(state.scene===8){
+    const step=state.matrixStep||0;
+    h+=`<div class="mxSteps">
+      <button data-step="0" class="${step===0?"activeStep":"secondary"}">Step 1</button>
+      <button data-step="1" class="${step===1?"activeStep":"secondary"}">Step 2</button>
+      <button data-step="2" class="${step===2?"activeStep":"secondary"}">Step 3</button>
+    </div>
+    <div class="note">Walk the three steps: <b>1</b> add a feature, <b>2</b> fold the whole layer into one matrix multiply, <b>3</b> batch many shots into a matrix–matrix multiply — the operation fast GPU/TPU hardware is built to accelerate.</div>`;
+  }else if(state.scene===9){
     h+=`<div class="note">A model with H hidden ramps and D inputs has approximately H(D+2)+1 parameters: D input weights, one hidden bias, one output weight per ramp, plus an output bias.</div>`;
   }
   document.getElementById("controls").innerHTML=h;
@@ -435,9 +489,9 @@ async function bestFit(){
 function renderSingleRamp(boundary=false){
   if(!document.getElementById("mainPlot"))document.getElementById("plotArea").innerHTML='<div id="mainPlot"></div>';
   const r=state.ramps[0];
-  const traces=[surfaceTrace(grid((x1,x2)=>relu(r.w1*x1+r.w2*x2+r.b)),"Ramp",.95,"Blues")];
-  if(boundary)traces.push(boundaryTrace(r));
-  Plotly.react("mainPlot",traces,sceneLayout(boundary?"Ramp and activation boundary":"One adjustable ramp",[-10,120]),{responsive:true,displaylogo:false});
+  const traces=[surfaceTrace(grid((x1,x2)=>r.a*relu(r.w1*x1+r.w2*x2+r.b),wideAxis),"Ramp",.95,"Blues",wideAxis),dataBoxTrace()];
+  if(boundary)traces.push(boundaryTrace(r,WLO,WHI,wideAxis));
+  Plotly.react("mainPlot",traces,sceneLayout(boundary?"Ramp and activation boundary":"One adjustable ramp",WIDE_Z,[WLO,WHI]),{responsive:true,displaylogo:false});
   bindCamera("mainPlot");
 }
 function renderSplit(){
@@ -445,8 +499,8 @@ function renderSplit(){
   <div class="plotCard"><div class="plotTitle">3D ramp</div><div id="ramp3d" class="smallPlot"></div></div>
   <div class="plotCard"><div class="plotTitle">Top-down view (before the bend)</div><div id="top2d" class="smallPlot"></div></div></div>`;
   const r=state.ramps[0];
-  Plotly.react("ramp3d",[surfaceTrace(grid((x1,x2)=>relu(r.w1*x1+r.w2*x2+r.b)),"Ramp",.95,"Blues"),boundaryTrace(r)],sceneLayout("",[-10,120]),{responsive:true,displaylogo:false});
-  Plotly.react("top2d",topDownData(r),{margin:{l:55,r:15,t:15,b:50},xaxis:{title:"Shot arc x₁",range:[0,100]},yaxis:{title:"Distance x₂",range:[0,100],scaleanchor:"x"},paper_bgcolor:"#fff",plot_bgcolor:"#fff",showlegend:false},{responsive:true,displaylogo:false});
+  Plotly.react("ramp3d",[surfaceTrace(grid((x1,x2)=>r.a*relu(r.w1*x1+r.w2*x2+r.b),wideAxis),"Ramp",.95,"Blues",wideAxis),boundaryTrace(r,WLO,WHI,wideAxis),dataBoxTrace()],sceneLayout("",WIDE_Z,[WLO,WHI]),{responsive:true,displaylogo:false});
+  Plotly.react("top2d",topDownData(r,wideAxis),{margin:{l:55,r:15,t:15,b:50},xaxis:{title:"Shot arc x₁",range:[WLO,WHI]},yaxis:{title:"Distance x₂",range:[WLO,WHI],scaleanchor:"x"},shapes:[{type:"rect",x0:0,y0:0,x1:100,y1:100,line:{color:"#111827",width:2,dash:"dash"}}],paper_bgcolor:"#fff",plot_bgcolor:"#fff",showlegend:false},{responsive:true,displaylogo:false});
   bindCamera("ramp3d");
 }
 function renderReality(){
@@ -482,23 +536,26 @@ function renderNetwork(){
   svg.style.display="block";
   let s="";
 
-  function edge(x1,y1,x2,y2,label,lx,ly,cls="wlabel"){
+  function edge(x1,y1,x2,y2,label,lx,ly){
     s+=`<line class="edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
-    if(label)s+=`<text class="${cls}" x="${lx}" y="${ly}">${label}</text>`;
+    if(label)s+=`<text x="${lx}" y="${ly}" text-anchor="middle" style="font-size:13px;font-weight:800;fill:${PARAM}">${label}</text>`;
   }
-  function rect(x,y,w,h,cls,l1,l2=""){
-    s+=`<rect class="${cls}" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="18"/>`;
-    s+=`<text x="${x}" y="${y-(l2?8:0)}" text-anchor="middle" style="font-size:14px;font-weight:800">${l1}</text>`;
-    if(l2)s+=`<text x="${x}" y="${y+15}" text-anchor="middle" style="font-size:12px;fill:#666">${l2}</text>`;
+  function box(x,y,w,h,cls,html){
+    s+=`<rect class="${cls}" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="18"/>${html}`;
+  }
+  function inputBox(x,y,sym,name){
+    box(x,y,155,65,"node",
+      `<text x="${x}" y="${y-2}" text-anchor="middle" style="font-size:23px;font-weight:900;fill:${INK}">${sym}</text>`+
+      `<text x="${x}" y="${y+20}" text-anchor="middle" style="font-size:12px;fill:#555">${name}</text>`);
   }
 
-  s+=`<text class="layer" x="110" y="35">Inputs</text>`;
-  s+=`<text class="layer" x="515" y="35">Hidden ramps</text>`;
+  s+=`<text class="layer" x="110" y="35">Input features</text>`;
+  s+=`<text class="layer" x="515" y="35">Ramps</text>`;
   s+=`<text class="layer" x="850" y="35">Output</text>`;
   s+=`<text class="layer" x="1020" y="35">Error</text>`;
 
-  rect(110,155,155,65,"node","Shot arc","x₁");
-  rect(110,330,155,65,"node","Distance","x₂");
+  inputBox(110,155,"x₁","shot arc");
+  inputBox(110,330,"x₂","distance");
 
   const ys=[105,245,385];
   ys.forEach((y,i)=>{
@@ -511,32 +568,21 @@ function renderNetwork(){
     edge(188,155,380,y,`${w1}=${r.w1.toFixed(2)}`,282,(155+y)/2-7);
     edge(188,330,380,y,`${w2}=${r.w2.toFixed(2)}`,282,(330+y)/2+14);
 
-    rect(
-      515,y,270,85,"hidden",
-      `ReLU(${w1}x₁ + ${w2}x₂ + ${b})`,
-      `${b}=${r.b.toFixed(2)}`
-    );
+    box(515,y,272,85,"hidden",
+      `<text x="515" y="${y-8}" text-anchor="middle" style="font-size:14px;font-weight:800;fill:${INK}">ReLU(<tspan fill="${PARAM}">${w1}</tspan>x₁ + <tspan fill="${PARAM}">${w2}</tspan>x₂ + <tspan fill="${PARAM}">${b}</tspan>)</text>`+
+      `<text x="515" y="${y+15}" text-anchor="middle" style="font-size:12px;font-weight:700;fill:${PARAM}">${b}=${r.b.toFixed(2)}</text>`);
 
-    edge(
-      650,y,770,245,
-      `${a}=${r.a>0?"+1":"−1"}`,
-      710,(y+245)/2-8,
-      "alabel"
-    );
+    edge(650,y,770,245,`${a}=${r.a>0?"+1":"−1"}`,710,(y+245)/2-8);
   });
 
-  rect(
-    850,245,150,104,"out",
-    "y = sum(inputs) + bias",
-    `bias=${state.outBias.toFixed(2)}`
-  );
+  box(850,245,152,104,"out",
+    `<text x="850" y="237" text-anchor="middle" style="font-size:13px;font-weight:800;fill:${INK}">y = sum + <tspan fill="${PARAM}">bias</tspan></text>`+
+    `<text x="850" y="259" text-anchor="middle" style="font-size:12px;font-weight:700;fill:${PARAM}">bias=${state.outBias.toFixed(2)}</text>`);
 
   edge(925,245,972,245,"",0,0);
-  rect(
-    1020,245,90,104,"err",
-    "Error",
-    rmse(3).toFixed(3)
-  );
+  box(1020,245,90,104,"err",
+    `<text x="1020" y="240" text-anchor="middle" style="font-size:14px;font-weight:800;fill:${INK}">Error</text>`+
+    `<text x="1020" y="262" text-anchor="middle" style="font-size:13px;font-weight:700;fill:${INK}">${rmse(3).toFixed(3)}</text>`);
 
   svg.innerHTML=s;
 }
@@ -552,10 +598,53 @@ function renderCounts(){
   document.getElementById("countArea").innerHTML=`<div class="note" style="font-size:20px;text-align:center"><b>Would you like to tune all of these by hand?</b><br><br>Lesson 4 will show how gradients tell every parameter which way to move.</div><div class="countCard">`+
   examples.map(([name,n])=>`<div class="countItem"><div>${name}</div><div class="countBig">${n}</div><div>trainable parameters</div></div>`).join("")+`</div>`;
 }
+function matHtml(rows,cls,cap){
+  const inner=rows.map(r=>`<div class="mrow">`+r.map(t=>`<div class="cell ${cls}">${t}</div>`).join("")+`</div>`).join("");
+  return `<div><div class="mat">${inner}</div><div class="matCap">${cap}</div></div>`;
+}
+function renderMatrixScene(){
+  document.getElementById("network").style.display="none";
+  const sub=subscriptNumber, step=state.matrixStep||0;
+  let body="";
+  if(step===0){
+    let rows="";
+    for(let i=1;i<=3;i++){
+      rows+=`<div class="cell" style="font-size:18px;margin:9px 0">ReLU( <span class="param">w${sub(i)}${sub(1)}</span>x₁ + <span class="param">w${sub(i)}${sub(2)}</span>x₂ <span class="hl"><span class="param">+ w${sub(i)}${sub(3)}</span>x₃</span> + <span class="param">b${sub(i)}</span> )</div>`;
+    }
+    body=`<div class="mxTitle">Step 1 · Add a third input feature x₃</div>
+      <div class="mxRow" style="flex-direction:column;gap:2px">${rows}</div>
+      <div class="mxNote">Each ramp already blends <span class="param">weights</span> with the <b>input features</b> (x₁, x₂ — shown in black). Adding a new feature <b>x₃</b> simply adds <b>one more weighted term per ramp</b> — the new <span class="param">weights w₁₃, w₂₃, w₃₃</span> (highlighted). Nothing else about the machine changes. <br><span style="font-size:13px;color:#555">Subscript convention: <span class="param">wᵢⱼ</span> = weight from input <b>j</b> into ramp <b>i</b>.</span></div>`;
+  }else if(step===1){
+    body=`<div class="mxTitle">Step 2 · The whole layer is one matrix multiply</div>
+      <div class="mxRow">
+        ${matHtml([["w₁₁","w₁₂","w₁₃"],["w₂₁","w₂₂","w₂₃"],["w₃₁","w₃₂","w₃₃"]],"param","W · weights (3 ramps × 3 inputs)")}
+        <div class="op">×</div>
+        ${matHtml([["x₁"],["x₂"],["x₃"]],"","x · features")}
+        <div class="op">+</div>
+        ${matHtml([["b₁"],["b₂"],["b₃"]],"param","b · biases")}
+        <div class="op">=</div>
+        ${matHtml([["h₁"],["h₂"],["h₃"]],"","ramp inputs")}
+      </div>
+      <div class="mxRow"><div class="cell" style="font-size:17px">then&nbsp; y = <span class="param">[a₁ a₂ a₃]</span> · ReLU(h) + <span class="param">bias</span></div></div>
+      <div class="mxNote">Every weighted arrow in the network diagram is just one entry of the matrix <span class="param">W</span>. Computing all three ramp inputs at once is exactly <b>one matrix × vector</b>: <span class="param">W</span>·x + <span class="param">b</span>. ReLU then bends each entry, the output weights <span class="param">a</span> combine them, and the <span class="param">bias</span> shifts the final answer.</div>`;
+  }else{
+    body=`<div class="mxTitle">Step 3 · Many shots at once → matrix × matrix</div>
+      <div class="mxRow">
+        ${matHtml([["w₁₁","w₁₂","w₁₃"],["w₂₁","w₂₂","w₂₃"],["w₃₁","w₃₂","w₃₃"]],"param","W · fixed weights")}
+        <div class="op">×</div>
+        ${matHtml([["x₁","x₁","x₁","…"],["x₂","x₂","x₂","…"],["x₃","x₃","x₃","…"]],"","X · one column per shot")}
+        <div class="op">=</div>
+        ${matHtml([["h₁","h₁","h₁","…"],["h₂","h₂","h₂","…"],["h₃","h₃","h₃","…"]],"","H · ramp inputs for every shot")}
+      </div>
+      <div class="mxRow"><div class="cell" style="font-size:16px">→ <span class="param">a</span> · ReLU(H) + <span class="param">bias</span> &nbsp;⇒&nbsp; y₁ y₂ y₃ … &nbsp;(one make-probability per shot)</div></div>
+      <div class="mxNote"><b>Stack many shots side by side</b> and the layer becomes a <b>matrix × matrix</b> multiply (engineers call it a "GEMM"). At <b>inference</b> the weights <span class="param">W</span> are already known and never change — only the inputs <b>X</b> differ. So a whole neural network is really a stack of big matrix multiplies. Speed up matrix multiplication and you speed up <i>every</i> prediction — which is exactly why companies like <b>NVIDIA</b> and <b>AMD</b> pour so much into hardware (GPUs / TPUs) dedicated to fast matrix multiplication.</div>`;
+  }
+  document.getElementById("plotArea").innerHTML=`<div class="mxScene">${body}</div>`;
+}
 function renderScene(){
   document.getElementById("network").style.display="none";
   document.getElementById("countArea").innerHTML="";
-  if(typeof Plotly === "undefined" && state.scene!==8){
+  if(typeof Plotly === "undefined" && state.scene<=7){
     document.getElementById("plotArea").innerHTML='<div class="note" style="font-size:16px">Couldn\'t load the 3D plotting library (Plotly). This lesson needs an internet connection the first time it opens — please reconnect and reload the page.</div>';
     return;
   }
@@ -567,6 +656,7 @@ function renderScene(){
   else if(state.scene===5)renderFitScene(2);
   else if(state.scene===6)renderFitScene(3);
   else if(state.scene===7)renderNetwork();
+  else if(state.scene===8)renderMatrixScene();
   else renderCounts();
 }
 let renderTimer=null;
@@ -590,11 +680,12 @@ function scheduleRender(){
   renderTimer=setTimeout(()=>renderScene(),75);
 }
 function updateHeader(){
-  document.getElementById("sceneNo").textContent=`Scene ${state.scene+1} of 9`;
+  document.getElementById("sceneNo").textContent=`Scene ${state.scene+1} of 10`;
   document.getElementById("question").textContent=scenes[state.scene][0];
   document.getElementById("sentence").textContent=scenes[state.scene][1];
   document.getElementById("prev").disabled=state.scene===0;
-  document.getElementById("next").textContent=state.scene===8?"Done":"Next →";
+  document.getElementById("next").textContent=state.scene===9?"Done":"Next →";
+  document.getElementById("plotToolbar").style.display=state.scene<=7?"flex":"none";
 }
 function buildScene(){
   updateHeader();
@@ -616,9 +707,13 @@ document.getElementById("controls").addEventListener("change",e=>{
   buildControls();
   renderScene();
 });
-document.getElementById("controls").addEventListener("click",e=>{if(e.target.id==="best")bestFit()});
+document.getElementById("controls").addEventListener("click",e=>{
+  if(e.target.id==="best"){bestFit();return}
+  if(e.target.dataset.step!==undefined){state.matrixStep=Number(e.target.dataset.step);buildControls();renderScene();}
+});
+document.getElementById("resetView").onclick=resetView;
 document.getElementById("prev").onclick=()=>{if(state.scene>0){state.scene--;buildScene()}};
-document.getElementById("next").onclick=()=>{if(state.scene<8){state.scene++;buildScene()}};
+document.getElementById("next").onclick=()=>{if(state.scene<9){state.scene++;buildScene()}};
 buildScene();
 </script>
 </body>

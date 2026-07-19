@@ -3,7 +3,7 @@
 A hands-on, browser-based course that builds a neural network from first principles,
 grounded in a robotics-club story: predicting the **probability that a robot's shot
 goes in** from three features you could read off a photo of the shot — its arc,
-its distance to the goal, and how clear the shot is.
+its distance to the goal, and how visible the goal is.
 
 Each lesson is a single, self-contained HTML file — no build step, no install.
 Just open it in a browser (or visit the published site).
@@ -12,7 +12,7 @@ Just open it in a browser (or visit the published site).
 
 1. **Features** (`lesson1_features.html`) — Reality is a function of inputs.
    Explore in 3D how a shot's make-probability changes with its arc, distance to
-   the goal, and clearness.
+   the goal, and goal visibility.
 2. **Hinges** (`lesson2_hinges.html`) — A line fails; a bendable ReLU "hinge"
    works. Stack hinges to approximate reality, then see the exact same model
    redrawn as a textbook neural network.
@@ -34,11 +34,11 @@ Just open it in a browser (or visit the published site).
 
 Every lesson models the same "reality" function, so students carry one mental
 model all the way from *features* to *backpropagation*. It turns three shot
-features (x1 = arc, x2 = distance to goal, x3 = clearness) into a make-probability
+features (x1 = arc, x2 = distance to goal, x3 = goal visibility) into a make-probability
 between 0 and 100%:
 
 ```
-make % = 100 · exp((x1 − 50 − 0.3·x2)^2 / −3000) · ln((110 − x2) / 10) / ln(11) · (x3 / 100)
+make % = 100 · exp((x1 − 40 − 0.3·x2)^2 / −3000) · ln((110 − x2) / 10) / ln(11) · (x3 / 100)
 ```
 
 ## Running locally

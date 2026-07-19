@@ -134,8 +134,8 @@ const scenes=[
 
 function reality(x){
   // A 1-feature slice of the shared make-probability model from Lessons 1-3:
-  // vary the shot arc x, holding distance = 50 and clearness = 100 fixed.
-  const arc=Math.exp(-((x-65)*(x-65))/3000);
+  // vary the shot arc x, holding distance = 50 and goal visibility = 100 fixed.
+  const arc=Math.exp(-((x-55)*(x-55))/3000);
   const dist=Math.log((110-50)/10)/Math.log(11);
   return 100*arc*dist;
 }

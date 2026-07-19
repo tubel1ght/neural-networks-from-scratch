@@ -23,8 +23,12 @@ button:disabled{opacity:.55;cursor:wait}.nav{display:flex;gap:10px;margin-top:18
 .value{float:right;font-weight:900;color:#111}.metric{font-size:32px;font-weight:900;margin:12px 0}
 .eq{font-family:ui-monospace,Menlo,Consolas,monospace;background:#f3f0ea;border:1px solid #e5ded2;border-radius:12px;padding:14px;white-space:pre-wrap;line-height:1.5;font-size:13px}
 .note{background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;margin-top:12px;font-size:14px;line-height:1.4}
+.fixedBox{background:#e0f2fe;border:1px solid #7dd3fc;border-radius:14px;padding:12px 14px;margin-bottom:14px}
+.fixedTitle{font-size:16px;font-weight:900;color:#0c4a6e}
+.fixedText{font-size:12.5px;color:#075985;margin:2px 0 2px;line-height:1.4}
+.fixedBox label{margin-top:10px}
 canvas{width:100%;height:570px;border:1px solid #eadfce;border-radius:16px;background:#fff}
-#net{width:100%;height:390px;border:1px solid #eadfce;border-radius:16px;background:#fff;margin-top:16px;display:none}
+#net{width:100%;height:430px;border:1px solid #eadfce;border-radius:16px;background:#fff;margin-top:16px;display:none}
 .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:#444;margin-top:10px}.sw{display:inline-block;width:16px;height:4px;border-radius:2px;margin-right:6px;vertical-align:middle}
 .node{fill:#fff;stroke:#111827;stroke-width:2.4}.nodeHidden{fill:#eff6ff;stroke:#1d4ed8;stroke-width:2.3}.nodeOut{fill:#ecfdf5;stroke:#15803d;stroke-width:2.5}
 .nodeText{font-size:14px;text-anchor:middle;dominant-baseline:middle;font-weight:800}.edge{stroke:#111827;stroke-width:2;opacity:.85}
@@ -51,33 +55,31 @@ canvas{width:100%;height:570px;border:1px solid #eadfce;border-radius:16px;backg
 </section>
 <main class="panel">
 <canvas id="graph" width="1000" height="570"></canvas>
-<div class="legend" id="legend">
-<span><span class="sw" style="background:#111827"></span>Reality</span>
-<span><span class="sw" style="background:#1d4ed8"></span>Model</span>
-<span><span class="sw" style="background:#6b7280"></span>Line</span>
-<span><span class="sw" style="background:#dc2626"></span>Hinge contributions</span>
-</div>
-<svg id="net" viewBox="0 0 1000 390"></svg>
+<div class="legend" id="legend"></div>
+<svg id="net" viewBox="0 0 1000 430"></svg>
 </main>
 </div>
 <script>
 const xs=Array.from({length:201},(_,i)=>100*i/200), displayXs=Array.from({length:301},(_,i)=>-100+i), HCOL=["#dc2626","#16a34a","#7c3aed","#ea580c"];
-const state={scene:0,x2:50,x3:50,outBias:10,lineSlope:.2,shapeC:50,shapeW:1,shapeA:1,neurons:[{c:25,w:1,a:1},{c:50,w:-1,a:1},{c:65,w:1,a:1},{c:85,w:-1,a:1}]};
+const state={scene:0,x2:50,x3:50,outBias:10,lineSlope:.2,lineCount:2,lines:[{m:0.6,b:6},{m:-0.35,b:-2},{m:0.2,b:14}],shapeC:50,shapeW:1,shapeA:1,neurons:[{c:25,w:1,a:1},{c:50,w:-1,a:1},{c:65,w:1,a:1},{c:85,w:-1,a:1}]};
 const scenes=[
 ["Why does a line fail?","Start with the simplest support: one line, controlled by a slope and a persistent output bias."],
-["Meet the adjustable hinge","A hinge is flat on one side of its bend and sloped on the other. Adjust its bias, bend location, weight, and direction sign."],
+["Why not just add more lines?","A single line fails — so why not sum several? Add lines and watch their combined output: it is always another straight line. No number of straight lines can bend toward the curved reality."],
+["Meet the adjustable hinge","First, the building block: ReLU(z) = z when z ≥ 0, and 0 when z < 0. Wrapping it as bias + w·ReLU(a·(x − c)) gives a hinge — flat on one side of the bend, sloped on the other. Adjust its output bias, bend location, weight, and direction sign."],
 ["Can two hinges replace the line?","Remove the explicit line. Keep the output bias and combine two independently oriented ReLU hinges."],
 ["Does a third hinge help?","Three hinges provide three independently placed and oriented bends."],
 ["Does a fourth hinge help?","A fourth hinge expands the model family, so its best error can never be worse."],
 ["Where is the neural network?","The same four-hinge model is now drawn in the usual input → hidden → output form. Each “ReLU” box is just a hinge — it stays at zero until its bend, then turns on."]
 ];
 function relu(z){return Math.max(0,z)}
-function reality(x){return 100*Math.exp(((x-50-.3*state.x2)**2)/-3000)*(Math.log((110-state.x2)/10)/Math.log(11))*(state.x3/100)}
-function activeK(){return state.scene<=1?0:state.scene===2?2:state.scene===3?3:4}
+function reality(x){return 100*Math.exp(((x-40-.3*state.x2)**2)/-3000)*(Math.log((110-state.x2)/10)/Math.log(11))*(state.x3/100)}
+function activeK(){return state.scene<=2?0:state.scene===3?2:state.scene===4?3:4}
 function useLine(){return state.scene===0}
 function neuronY(n,x){return n.a*relu(n.w*(x-n.c))}
 function modelY(x){let y=state.outBias+(useLine()?state.lineSlope*x:0);for(let i=0;i<activeK();i++)y+=neuronY(state.neurons[i],x);return y}
-function rmse(){return Math.sqrt(xs.reduce((s,x)=>{const e=modelY(x)-reality(x);return s+e*e},0)/xs.length)}
+function lineSum(x){let y=0;for(let i=0;i<state.lineCount;i++)y+=state.lines[i].m*x+state.lines[i].b;return y}
+function linesEquation(){let mm=0,bb=0;const parts=[];for(let i=0;i<state.lineCount;i++){const L=state.lines[i];mm+=L.m;bb+=L.b;parts.push(`(${L.m.toFixed(2)}·x ${L.b>=0?"+":"−"} ${Math.abs(L.b).toFixed(1)})`)}return"sum = "+parts.join(" + ")+`\n    = ${mm.toFixed(2)}·x ${bb>=0?"+":"−"} ${Math.abs(bb).toFixed(1)}   ← still one line`}
+function rmse(){const f=state.scene===1?lineSum:modelY;return Math.sqrt(xs.reduce((s,x)=>{const e=f(x)-reality(x);return s+e*e},0)/xs.length)}
 function solve(A,y){const n=A[0].length,M=Array.from({length:n},()=>Array(n+1).fill(0));for(let r=0;r<A.length;r++)for(let i=0;i<n;i++){for(let j=0;j<n;j++)M[i][j]+=A[r][i]*A[r][j];M[i][n]+=A[r][i]*y[r]}for(let i=0;i<n;i++){let m=i;for(let r=i+1;r<n;r++)if(Math.abs(M[r][i])>Math.abs(M[m][i]))m=r;[M[i],M[m]]=[M[m],M[i]];let p=M[i][i];if(Math.abs(p)<1e-10)p=p<0?-1e-10:1e-10;for(let j=i;j<=n;j++)M[i][j]/=p;for(let r=0;r<n;r++){if(r===i)continue;const f=M[r][i];for(let j=i;j<=n;j++)M[r][j]-=f*M[i][j]}}return M.map(r=>r[n])}
 function basis(x,c,s){return relu(s*(x-c))}
 function fitForBasis(selected,withLine){const y=xs.map(reality),A=xs.map(x=>{const row=[1];if(withLine)row.push(x);selected.forEach(h=>row.push(basis(x,h.c,h.s)));return row});const coeff=solve(A,y);const err=Math.sqrt(xs.reduce((sum,x,i)=>{let p=coeff[0],idx=1;if(withLine)p+=coeff[idx++]*x;selected.forEach(h=>p+=coeff[idx++]*basis(x,h.c,h.s));const e=p-y[i];return sum+e*e},0)/xs.length);return{coeff,err}}
@@ -85,15 +87,15 @@ function dictionary(){const arr=[];for(let c=-100;c<=200;c+=2){arr.push({c,s:1})
 function sameBasis(a,b){return a.c===b.c&&a.s===b.s}
 function greedyBest(k,withLine){const dict=dictionary();let selected=[];for(let step=0;step<k;step++){let best=null;for(const cand of dict){if(selected.some(h=>sameBasis(h,cand)))continue;const trial=selected.concat([cand]),fit=fitForBasis(trial,withLine);if(!best||fit.err<best.fit.err)best={selected:trial,fit}}selected=best.selected}for(let pass=0;pass<2;pass++)for(let i=0;i<selected.length;i++){let best={selected:selected.slice(),fit:fitForBasis(selected,withLine)};for(const cand of dict){const trial=selected.slice();trial[i]=cand;if(trial.some((h,j)=>j!==i&&sameBasis(h,cand)))continue;const fit=fitForBasis(trial,withLine);if(fit.err<best.fit.err)best={selected:trial,fit}}selected=best.selected}return{selected,fit:fitForBasis(selected,withLine)}}
 function applyCanonicalFit(result,withLine){const{selected,fit}=result;let idx=0;state.outBias=fit.coeff[idx++];if(withLine)state.lineSlope=fit.coeff[idx++];selected.forEach((h,i)=>{const q=fit.coeff[idx++],mag=Math.sqrt(Math.abs(q));state.neurons[i].c=h.c;state.neurons[i].w=h.s*mag;state.neurons[i].a=q===0?1:Math.sign(q)*mag})}
-async function bestFit(){const btn=document.getElementById("best");btn.disabled=true;btn.textContent="Finding best fit…";await new Promise(r=>setTimeout(r,20));if(state.scene===0){const y=xs.map(reality),A=xs.map(x=>[1,x]),c=solve(A,y);state.outBias=c[0];state.lineSlope=c[1]}else if(state.scene===1){buildScene();return;}else applyCanonicalFit(greedyBest(activeK(),false),false);buildScene()}
-function equation(){const parts=[];parts.push(`${state.outBias.toFixed(2)}${useLine()?` ${state.lineSlope>=0?"+":"-"} ${Math.abs(state.lineSlope).toFixed(3)}·x`:""}`);for(let i=0;i<activeK();i++){const n=state.neurons[i],sign=n.a>=0?"+":"-";parts.push(`${sign} ReLU(${n.w.toFixed(3)}·(x − ${n.c.toFixed(1)}))`)}return"model(x) =\n  "+parts.join("\n  ")}
+async function bestFit(){const btn=document.getElementById("best");btn.disabled=true;btn.textContent="Finding best fit…";await new Promise(r=>setTimeout(r,20));if(state.scene===0){const y=xs.map(reality),A=xs.map(x=>[1,x]),c=solve(A,y);state.outBias=c[0];state.lineSlope=c[1]}else if(state.scene===1){const y=xs.map(reality),A=xs.map(x=>[1,x]),c=solve(A,y);state.lines[0]={m:c[1],b:c[0]};for(let i=1;i<state.lines.length;i++)state.lines[i]={m:0,b:0}}else if(state.scene===2){buildScene();return;}else applyCanonicalFit(greedyBest(activeK(),false),false);buildScene()}
+function equation(){if(state.scene===1)return linesEquation();const parts=[];parts.push(`${state.outBias.toFixed(2)}${useLine()?` ${state.lineSlope>=0?"+":"-"} ${Math.abs(state.lineSlope).toFixed(3)}·x`:""}`);for(let i=0;i<activeK();i++){const n=state.neurons[i],sign=n.a>=0?"+":"-";parts.push(`${sign} ReLU(${n.w.toFixed(3)}·(x − ${n.c.toFixed(1)}))`)}return"model(x) =\n  "+parts.join("\n  ")}
 function slider(id,label,val,min,max,step){return`<label>${label}<span class="value" id="${id}Val">${Number(val).toFixed(step<1?2:0)}</span></label><input data-id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${val}">`}
 function neuronControls(i){const n=state.neurons[i];return`<div class="note"><b>Hinge ${i+1}</b><label>Hinge location c${i+1}<span class="value" id="cVal${i}">${n.c.toFixed(1)}</span></label><input data-c="${i}" type="range" min="-100" max="200" step="1" value="${n.c}"><label>Weight w${i+1}<span class="value" id="wVal${i}">${n.w.toFixed(2)}</span></label><input data-w="${i}" type="range" min="-8" max="8" step=".05" value="${n.w}"><div style="margin-top:10px;font-size:14px"><b>Direction sign a${i+1}:</b> <span id="aVal${i}">${n.a>0?"+1":"−1"}</span> <span style="color:#666">(chosen by Best fit; no slider)</span></div></div>`}
 function shapeEquation(){
   const w=state.shapeW.toFixed(2);
   const c=state.shapeC.toFixed(1);
   const a=state.shapeA>0?"+1":"−1";
-  return `hinge(x) = ${state.outBias.toFixed(2)} + ${w}·max(0, ${a}·(x − ${c}))`;
+  return `hinge(x) = ${state.outBias.toFixed(2)} + ${w}·ReLU(${a}·(x − ${c}))`;
 }
 function directionControls(){
   return `<label>Direction a</label>
@@ -106,17 +108,40 @@ function directionControls(){
     </label>
   </div>`;
 }
+function lineControls(){
+  let h=`<div class="fixedBox" style="background:#f5f3ff;border-color:#c4b5fd">
+    <div class="fixedTitle" style="color:#4c1d95">Model: a sum of straight lines</div>
+    <div class="fixedText" style="color:#5b21b6">Each line spans the whole input (its own slope + intercept). Add more and watch the sum.</div>
+    <label>Number of lines <span class="value" id="lineCountVal">${state.lineCount}</span></label>
+    <div style="display:flex;gap:22px;margin:2px 0 4px">`;
+  [1,2,3].forEach(n=>{h+=`<label style="font-weight:600;margin:0"><input type="radio" name="lineCount" data-linecount="${n}" value="${n}" ${state.lineCount===n?"checked":""}> ${n}</label>`});
+  h+=`</div>`;
+  for(let i=0;i<state.lineCount;i++){
+    const L=state.lines[i];
+    h+=`<label>Line ${i+1} slope<span class="value" id="lineM${i}Val">${L.m.toFixed(2)}</span></label><input data-line="${i}" data-lk="m" type="range" min="-5" max="5" step=".02" value="${L.m}">`;
+    h+=`<label>Line ${i+1} intercept<span class="value" id="lineB${i}Val">${L.b.toFixed(1)}</span></label><input data-line="${i}" data-lk="b" type="range" min="-120" max="120" step="1" value="${L.b}">`;
+  }
+  h+=`</div>`;
+  return h;
+}
 function buildControls(){
   let h="";
-  if(state.scene<5){
-    h+=slider("x2","Distance to goal",state.x2,0,100,1);
-    h+=slider("x3","Shot clearness",state.x3,0,100,1);
+  if(state.scene<6){
+    h+=`<div class="fixedBox"><div class="fixedTitle">Fixed inputs</div>
+    <div class="fixedText">These describe the shot itself (the reality we're modeling). They stay fixed while you tune the model parameters below.</div>`
+    +slider("x2","x2 (distance to goal)",state.x2,0,100,1)
+    +slider("x3","x3 (goal visibility)",state.x3,0,100,1)
+    +`</div>`;
   }
-  h+=slider("outBias","Output bias",state.outBias,-120,120,.5);
+  if(state.scene!==1)h+=slider("outBias","Output bias",state.outBias,-120,120,.5);
 
   if(state.scene===0){
     h+=slider("lineSlope","Line slope",state.lineSlope,-5,5,.02);
   }else if(state.scene===1){
+    h+=lineControls();
+    h+=`<div class="note">Adding straight lines can't create a bend: (m₁·x + b₁) + (m₂·x + b₂) = (m₁+m₂)·x + (b₁+b₂) — still one straight line. Press <b>Best fit</b>: even the best sum of lines only matches the best single line. To curve toward reality we need a <b>kink</b> — the hinge, next.</div>`;
+  }else if(state.scene===2){
+    h+=`<div class="note" style="background:#eef2ff;border-color:#c7d2fe"><b>The ReLU — our nonlinear building block</b><br><span style="font-size:15px">ReLU(z) = z&nbsp;&nbsp;if z ≥ 0<br>ReLU(z) = 0&nbsp;&nbsp;if z &lt; 0</span><br>It passes positives through unchanged and clamps negatives to 0. That flat-then-sloped shape is the kink a plain line can never make. The hinge below is just <b>output bias + w·ReLU(a·(x − c))</b>.</div>`;
     h+=slider("shapeC","Hinge location",state.shapeC,-100,200,1);
     h+=slider("shapeW","Weight w",state.shapeW,-8,8,.05);
     h+=directionControls();
@@ -125,13 +150,13 @@ function buildControls(){
     for(let i=0;i<activeK();i++)h+=neuronControls(i);
   }
 
-  if(state.scene!==1)h+=`<button class="fit" id="best">Best fit</button>`;
-  h+=`<div class="metric" id="errorBox">${state.scene===1?"Explore the hinge":"Error: "+rmse().toFixed(3)}</div>
-      <div class="eq" id="modelEq">${state.scene===1?shapeEquation():equation()}</div>`;
-  if(state.scene>=2)h+=`<div class="note"><b>Output polarity:</b> the continuous magnitude is absorbed into w. The remaining a is only +1 or −1.</div>`;
+  if(state.scene!==2)h+=`<button class="fit" id="best">Best fit</button>`;
+  h+=`<div class="metric" id="errorBox">${state.scene===2?"Explore the hinge":"Error: "+rmse().toFixed(3)}</div>
+      <div class="eq" id="modelEq">${state.scene===2?shapeEquation():equation()}</div>`;
+  if(state.scene>=3)h+=`<div class="note"><b>Output polarity:</b> the continuous magnitude is absorbed into w. The remaining a is only +1 or −1.</div>`;
   document.getElementById("controls").innerHTML=h;
 }
-function updateReadouts(){["x2","x3","outBias","lineSlope","shapeC","shapeW"].forEach(id=>{const e=document.getElementById(id+"Val");if(e)e.textContent=Number(state[id]).toFixed(id.includes("Slope")?2:0)});state.neurons.forEach((n,i)=>{const c=document.getElementById("cVal"+i),w=document.getElementById("wVal"+i),a=document.getElementById("aVal"+i);if(c)c.textContent=n.c.toFixed(1);if(w)w.textContent=n.w.toFixed(2);if(a)a.textContent=n.a>0?"+1":"−1"});const er=document.getElementById("errorBox");if(er)er.textContent="Error: "+rmse().toFixed(3);const eq=document.getElementById("modelEq");if(eq)eq.textContent=equation()}
+function updateReadouts(){["x2","x3","outBias","lineSlope","shapeC","shapeW"].forEach(id=>{const e=document.getElementById(id+"Val");if(e)e.textContent=Number(state[id]).toFixed(id.includes("Slope")?2:0)});state.neurons.forEach((n,i)=>{const c=document.getElementById("cVal"+i),w=document.getElementById("wVal"+i),a=document.getElementById("aVal"+i);if(c)c.textContent=n.c.toFixed(1);if(w)w.textContent=n.w.toFixed(2);if(a)a.textContent=n.a>0?"+1":"−1"});state.lines.forEach((L,i)=>{const m=document.getElementById("lineM"+i+"Val"),b=document.getElementById("lineB"+i+"Val");if(m)m.textContent=L.m.toFixed(2);if(b)b.textContent=L.b.toFixed(1)});const er=document.getElementById("errorBox");if(er)er.textContent=state.scene===2?"Explore the hinge":"Error: "+rmse().toFixed(3);const eq=document.getElementById("modelEq");if(eq)eq.textContent=state.scene===2?shapeEquation():equation()}
 function drawGraph(){
   const c=document.getElementById("graph"),ctx=c.getContext("2d");
   const W=c.width,H=c.height,m={l:76,r:24,t:28,b:62},pw=W-m.l-m.r,ph=H-m.t-m.b;
@@ -177,11 +202,14 @@ function drawGraph(){
     ctx.stroke();ctx.restore();
   }
 
-  if(state.scene!==1) curve(xs,reality,"#111827",5);
+  if(state.scene!==2) curve(xs,reality,"#111827",5);
 
   if(state.scene===0){
     curve(displayXs,x=>state.outBias+state.lineSlope*x,"#6b7280",4,[8,6]);
   }else if(state.scene===1){
+    for(let i=0;i<state.lineCount;i++){const L=state.lines[i];curve(displayXs,x=>L.m*x+L.b,HCOL[i],2.4)}
+    curve(displayXs,lineSum,"#1d4ed8",5,[10,6]);
+  }else if(state.scene===2){
     const c0=state.shapeC,w0=state.shapeW,a0=state.shapeA;
     const hinge=x=>state.outBias+w0*relu(a0*(x-c0));
     curve(displayXs,hinge,"#1d4ed8",5);
@@ -190,26 +218,78 @@ function drawGraph(){
     curve(displayXs,modelY,"#1d4ed8",5,[10,6]);
   }
 
-  if(state.scene!==1){
+  if(state.scene!==2){
     ctx.fillStyle="#92400e";ctx.font="bold 13px Arial";
     ctx.fillText("Error is measured only here",X(28),H-m.b-10);
   }
-}function drawNetwork(){const svg=document.getElementById("net");if(state.scene!==5){svg.style.display="none";svg.innerHTML="";return}svg.style.display="block";let s="";const line=(x1,y1,x2,y2,cls,label,lx,ly)=>{s+=`<line class="${cls}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;if(label)s+=`<text class="${cls==="edge"?"edgeLabel":"outLabel"}" x="${lx}" y="${ly}">${label}</text>`};const circle=(x,y,r,cls,label)=>{s+=`<circle class="${cls}" cx="${x}" cy="${y}" r="${r}"/><text class="nodeText" x="${x}" y="${y}">${label}</text>`};s+=`<text class="layerLabel" x="110" y="34">Input</text><text class="layerLabel" x="500" y="34">Hidden ReLU neurons</text><text class="layerLabel" x="865" y="34">Output</text>`;circle(110,200,42,"node","x");const ys=[75,155,235,315];ys.forEach((y,i)=>{const n=state.neurons[i],b=-n.w*n.c;line(152,200,390,y,"edge",`w${i+1}=${n.w.toFixed(2)}`,270,(200+y)/2-8);s+=`<circle class="nodeHidden" cx="500" cy="${y}" r="62"/><text x="500" y="${y-18}" text-anchor="middle" style="font-size:14px;font-weight:800">ReLU(w${i+1}x+b${i+1})</text><text class="biasLabel" x="500" y="${y+6}">b${i+1}=${b.toFixed(2)}</text><text x="500" y="${y+28}" text-anchor="middle" style="font-size:12px;fill:#666">c${i+1}=${n.c.toFixed(1)}</text>`;line(562,y,823,200,"out",`a${i+1}=${n.a>0?"+1":"−1"}`,690,(200+y)/2-8)});circle(865,200,48,"nodeOut","ŷ");s+=`<text class="biasLabel" x="865" y="270">output bias=${state.outBias.toFixed(2)}</text><text x="500" y="375" text-anchor="middle" style="font-size:14px;fill:#555;font-weight:700">Because bᵢ = −wᵢcᵢ, the hinge-location slider maps exactly to the textbook neuron. Each output polarity aᵢ is fixed to +1 or −1.</text>`;svg.innerHTML=s}
-function updateScene(){document.getElementById("sceneNo").textContent=`Scene ${state.scene+1} of 6`;document.getElementById("question").textContent=scenes[state.scene][0];document.getElementById("sentence").textContent=scenes[state.scene][1];document.getElementById("prev").disabled=state.scene===0;document.getElementById("next").textContent=state.scene===5?"Done":"Next →"}
+}const INK="#111827", PARAM="#dc2626";
+function buildLegend(){
+  const el=document.getElementById("legend");
+  if(!el)return;
+  if(state.scene===2){el.style.display="none";return;}
+  el.style.display="flex";
+  const item=(color,label)=>`<span><span class="sw" style="background:${color}"></span>${label}</span>`;
+  let items=[item("#111827","Reality")];
+  if(state.scene===0){
+    items.push(item("#6b7280","Line (current model)"));
+  }else if(state.scene===1){
+    items.push(item("#1d4ed8","Sum of lines"));
+    for(let i=0;i<state.lineCount;i++)items.push(item(HCOL[i],`Line ${i+1}`));
+  }else{
+    items.push(item("#1d4ed8","Model"));
+    for(let i=0;i<activeK();i++)items.push(item(HCOL[i],`Hinge ${i+1}`));
+  }
+  el.innerHTML=items.join("");
+}
+function drawNetwork(){
+  const svg=document.getElementById("net");
+  if(state.scene!==6){svg.style.display="none";svg.innerHTML="";return}
+  svg.style.display="block";
+  let s="";
+  const edge=(x1,y1,x2,y2,label,lx,ly)=>{
+    s+=`<line class="edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    if(label)s+=`<text x="${lx}" y="${ly}" text-anchor="middle" style="font-size:13px;font-weight:800;fill:${PARAM}">${label}</text>`;
+  };
+  const box=(x,y,w,h,cls,html)=>{
+    s+=`<rect class="${cls}" x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="16"/>${html}`;
+  };
+  s+=`<text class="layerLabel" x="95" y="26">Input features</text>`;
+  s+=`<text class="layerLabel" x="500" y="26">Hinges</text>`;
+  s+=`<text class="layerLabel" x="862" y="26">Output</text>`;
+  box(95,215,130,64,"node",
+    `<text x="95" y="210" text-anchor="middle" style="font-size:23px;font-weight:900;fill:${INK}">x</text>`+
+    `<text x="95" y="233" text-anchor="middle" style="font-size:12px;fill:#555">shot arc</text>`);
+  const ys=[82,170,258,346];
+  ys.forEach((y,i)=>{
+    const n=state.neurons[i],b=-n.w*n.c;
+    edge(160,215,380,y,`w${i+1}=${n.w.toFixed(2)}`,268,(215+y)/2-7);
+    box(500,y,246,74,"nodeHidden",
+      `<text x="500" y="${y-6}" text-anchor="middle" style="font-size:14px;font-weight:800;fill:${INK}">ReLU(<tspan fill="${PARAM}">w${i+1}</tspan>x + <tspan fill="${PARAM}">b${i+1}</tspan>)</text>`+
+      `<text x="500" y="${y+16}" text-anchor="middle" style="font-size:12px;font-weight:700"><tspan fill="${PARAM}">b${i+1}=${b.toFixed(2)}</tspan><tspan fill="#94a3b8"> · c${i+1}=${n.c.toFixed(1)}</tspan></text>`);
+    edge(620,y,774,214,`a${i+1}=${n.a>0?"+1":"−1"}`,700,(y+214)/2-7);
+  });
+  box(862,214,180,96,"nodeOut",
+    `<text x="862" y="208" text-anchor="middle" style="font-size:15px;font-weight:800;fill:${INK}">ŷ = sum + <tspan fill="${PARAM}">bias</tspan></text>`+
+    `<text x="862" y="230" text-anchor="middle" style="font-size:12px;font-weight:700;fill:${PARAM}">output bias=${state.outBias.toFixed(2)}</text>`);
+  s+=`<text x="500" y="412" text-anchor="middle" style="font-size:14px;fill:#555;font-weight:700">The hinge location <tspan fill="#94a3b8">cᵢ</tspan> (gray) isn't a separate parameter — since <tspan fill="${PARAM}">bᵢ</tspan> = −<tspan fill="${PARAM}">wᵢ</tspan>·<tspan fill="#94a3b8">cᵢ</tspan>, it just re-reads the bias. The real parameters (red) are the weights <tspan fill="${PARAM}">wᵢ</tspan> and biases <tspan fill="${PARAM}">bᵢ</tspan>; each polarity <tspan fill="${PARAM}">aᵢ</tspan> is fixed to +1 or −1.</text>`;
+  svg.innerHTML=s;
+}
+function updateScene(){document.getElementById("sceneNo").textContent=`Scene ${state.scene+1} of 7`;document.getElementById("question").textContent=scenes[state.scene][0];document.getElementById("sentence").textContent=scenes[state.scene][1];document.getElementById("prev").disabled=state.scene===0;document.getElementById("next").textContent=state.scene===6?"Done":"Next →"}
 function updateAll(){
   updateReadouts();
   drawGraph();
   drawNetwork();
-  const legend=document.getElementById("legend");
-  if(legend) legend.style.display=state.scene===1?"none":"flex";
+  buildLegend();
 }function buildScene(){updateScene();buildControls();updateAll()}
 document.getElementById("controls").addEventListener("input",e=>{
   const t=e.target;
+  if(t.name==="lineCount"){state.lineCount=Number(t.dataset.linecount);buildControls();updateAll();return}
   if(t.name==="shapeA") state.shapeA=Number(t.value);
+  else if(t.dataset.line!==undefined) state.lines[+t.dataset.line][t.dataset.lk]=+t.value;
   else if(t.dataset.id) state[t.dataset.id]=+t.value;
   else if(t.dataset.c) state.neurons[+t.dataset.c].c=+t.value;
   else if(t.dataset.w) state.neurons[+t.dataset.w].w=+t.value;
   updateAll();
 });
-document.getElementById("controls").addEventListener("click",e=>{if(e.target.id==="best")bestFit()});document.getElementById("prev").onclick=()=>{if(state.scene>0){state.scene--;buildScene()}};document.getElementById("next").onclick=()=>{if(state.scene<5){state.scene++;buildScene()}};buildScene();
+document.getElementById("controls").addEventListener("click",e=>{if(e.target.id==="best")bestFit()});document.getElementById("prev").onclick=()=>{if(state.scene>0){state.scene--;buildScene()}};document.getElementById("next").onclick=()=>{if(state.scene<6){state.scene++;buildScene()}};buildScene();
 </script></body></html>

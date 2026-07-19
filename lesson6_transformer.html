@@ -71,7 +71,7 @@ canvas{width:100%;height:600px;border:1px solid #eadfce;border-radius:16px;backg
 </div>
 
 <script>
-function reality(a,c,q){const arc=Math.exp(-((a-50-0.3*c)**2)/3000);const dist=Math.log((110-c)/10)/Math.log(11);const clear=q/100;return 100*arc*dist*clear;}
+function reality(a,c,q){const arc=Math.exp(-((a-40-0.3*c)**2)/3000);const dist=Math.log((110-c)/10)/Math.log(11);const clear=q/100;return 100*arc*dist*clear;}
 
 // A 9x9 shot photo split into a 3x3 grid of patches (9 patches).
 const G=9, P=3, NP=P*P;
@@ -217,7 +217,7 @@ function buildControls(){
     h+=`<label>This shot</label>
     ${sliderRow("arc","Shot arc",state.arc,0,100,1)}
     ${sliderRow("close","Distance to goal",state.close,0,100,1)}
-    ${sliderRow("clear","Shot clearness",state.clear,0,100,1)}`;
+    ${sliderRow("clear","Goal visibility",state.clear,0,100,1)}`;
     if(state.scene===2){h+=sliderRow("query","Query patch (1–9)",state.query+1,1,9,1);
       h+=`<div class="note blueNote">Move the query patch. It attends most to patches whose embeddings are similar — usually the other bright, ball-containing patches.</div>`;}
     else h+=`<div class="note">Each patch's embedding is just a few numbers summarizing that corner of the photo.</div>`;

@@ -144,7 +144,7 @@ button:hover{filter:brightness(.95)}
 <body>
 <header>
   <h1>What makes a shot go in?</h1>
-  <p class="subtitle">Explore how the chance of making a shot changes with the shot's arc, its distance to the goal, and how clear the shot is.</p>
+  <p class="subtitle">Explore how the chance of making a shot changes with the shot's arc, its distance to the goal, and how visible the goal is.</p>
   <nav class="lessonNav">
     <a href="index.html">Home</a>
     <a href="lesson1_features.html" class="active">1 · Features</a>
@@ -160,14 +160,14 @@ button:hover{filter:brightness(.95)}
   <section class="panel controls">
     <span class="pill">x1 = shot arc</span>
     <span class="pill">x2 = distance to goal</span>
-    <span class="pill">x3 = shot clearness</span>
+    <span class="pill">x3 = goal visibility</span>
 
     <label>Color points by</label>
     <select id="colorBy">
       <option value="none">None</option>
       <option value="x1">x1 (shot arc)</option>
       <option value="x2">x2 (distance)</option>
-      <option value="x3" selected>x3 (shot clarity)</option>
+      <option value="x3" selected>x3 (goal visibility)</option>
       <option value="score">y (make probability)</option>
     </select>
 
@@ -186,7 +186,7 @@ button:hover{filter:brightness(.95)}
       <div><span class="small">end</span><input id="x2SliceMax" type="number" min="0" max="100" step="1" value="100"></div>
     </div>
 
-    <label>x3 (shot clarity)</label>
+    <label>x3 (goal visibility)</label>
     <div class="two">
       <div><span class="small">start</span><input id="x3SliceMin" type="number" min="0" max="100" step="1" value="0"></div>
       <div><span class="small">end</span><input id="x3SliceMax" type="number" min="0" max="100" step="1" value="100"></div>
@@ -195,7 +195,7 @@ button:hover{filter:brightness(.95)}
     <h2>Reality equation</h2>
     <p class="small">This hidden "truth" turns three shot features into a make-probability (0–100%). You can edit it, but you never need to understand it.</p>
     <textarea id="equation" spellcheck="false">100
-* exp((x1-50-0.3*x2)^2 / -3000)
+* exp((x1-40-0.3*x2)^2 / -3000)
 * ln((110-x2)/10) / ln(11)
 * (x3/100)</textarea>
     <button id="resetEq" type="button" style="width:auto;font-size:13px;font-weight:700;padding:6px 12px;margin-top:8px;background:#f5f5f5;color:#222;border-color:#999">Reset equation</button>
@@ -208,6 +208,9 @@ button:hover{filter:brightness(.95)}
   </section>
 
   <main class="panel plotPanel">
+    <div style="display:flex;justify-content:flex-end;padding:2px 4px 0">
+      <button id="resetView" type="button" style="width:auto;font-size:13px;font-weight:700;padding:6px 12px;margin-top:0;background:#f5f5f5;color:#222;border-color:#999">⟲ Reset view</button>
+    </div>
     <div id="plot"></div>
   </main>
 </div>
@@ -239,6 +242,7 @@ const lockedColorScale = [
 ];
 
 const DEFAULT_EQUATION = document.getElementById("equation").value;
+const DEFAULT_CAMERA = {eye:{x:0.35, y:-2.0, z:0.75}, up:{x:0, y:0, z:1}};
 
 function getNum(id){
   return Number(document.getElementById(id).value);
@@ -321,7 +325,7 @@ function colorInfo(d){
   if(colorBy === "none") return {values:null, title:"", phrase:"no coloring"};
   if(colorBy === "x1") return {values:d.xs, title:"x1 arc", cmin:0, cmax:100};
   if(colorBy === "x2") return {values:d.x2s, title:"x2 distance", cmin:0, cmax:100};
-  if(colorBy === "x3") return {values:d.x3s, title:"x3 clearness", cmin:0, cmax:100};
+  if(colorBy === "x3") return {values:d.x3s, title:"x3 visibility", cmin:0, cmax:100};
   return {values:d.scores, title:"make %", cauto:true};
 }
 
@@ -399,7 +403,7 @@ function updatePlot(){
     text:d.xs.map((x1,i)=>
       `x1 shot arc: ${x1.toFixed(1)}<br>`+
       `x2 distance: ${d.x2s[i].toFixed(1)}<br>`+
-      `x3 clearness: ${d.x3s[i].toFixed(1)}<br>`+
+      `x3 visibility: ${d.x3s[i].toFixed(1)}<br>`+
       `make chance: ${d.scores[i].toFixed(1)}%`
     ),
     hoverinfo:"text"
@@ -412,8 +416,8 @@ function updatePlot(){
     scene:{
       xaxis:{title:"x1 (shot arc)", range:[0,100]},
       yaxis:{title:"x2 (distance to goal)", range:[0,100]},
-      zaxis:{title:"make probability (%)"},
-      camera:{eye:{x:0.35, y:-2.0, z:0.75}, up:{x:0, y:0, z:1}}
+      zaxis:{title:"make probability (%)", range:[0,100]},
+      camera:DEFAULT_CAMERA
     },
     uirevision:"keep-camera"
   };
@@ -432,6 +436,9 @@ document.getElementById("equation").addEventListener("input", clearError);
 document.getElementById("resetEq").addEventListener("click", ()=>{
   document.getElementById("equation").value = DEFAULT_EQUATION;
   updatePlot();
+});
+document.getElementById("resetView").addEventListener("click", ()=>{
+  Plotly.relayout("plot", {"scene.camera": JSON.parse(JSON.stringify(DEFAULT_CAMERA))});
 });
 
 updatePlot();
